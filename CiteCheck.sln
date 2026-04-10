@@ -1,9 +1,9 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.14.36408.4 d17.14
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11626.88 stable
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CiteCheck", "CiteCheck\CiteCheck.csproj", "{D979B008-0B3A-4E22-A24B-2AC78BE4615A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CiteCheck", "CiteCheck.csproj", "{57EEC8F3-058E-0E5E-FA44-726DA9F851EE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,15 +11,15 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{D979B008-0B3A-4E22-A24B-2AC78BE4615A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D979B008-0B3A-4E22-A24B-2AC78BE4615A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D979B008-0B3A-4E22-A24B-2AC78BE4615A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D979B008-0B3A-4E22-A24B-2AC78BE4615A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57EEC8F3-058E-0E5E-FA44-726DA9F851EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57EEC8F3-058E-0E5E-FA44-726DA9F851EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57EEC8F3-058E-0E5E-FA44-726DA9F851EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57EEC8F3-058E-0E5E-FA44-726DA9F851EE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {1080928C-C27C-433E-A0A1-46CB51DC2BA2}
+		SolutionGuid = {4E406136-867F-48CB-8A42-A7D6D4BDA66D}
 	EndGlobalSection
 EndGlobal
