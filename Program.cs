@@ -20,7 +20,6 @@ public class Program
       public GrobidSettings Grobid { get; set; } = new();
       public ApiSettings Apis { get; set; } = new();
       public ProcessingSettings Processing { get; set; } = new();
-      public AiSettings Ai { get; set; } = new();
    }
 
    private sealed class GrobidSettings
@@ -40,14 +39,6 @@ public class Program
       public bool Verbose { get; set; } = false;
    }
 
-   private sealed class AiSettings
-   {
-      public int MaxConcurrency { get; set; } = 3;
-      public string OllamaGenerateUrl { get; set; } = DocTypeClassifierLLM.DefaultOllamaGenerateUrl;
-      public string Model { get; set; } = DocTypeClassifierLLM.DefaultModel;
-      public string PromptPath { get; set; } = DocTypeClassifierLLM.DefaultPromptPath;
-   }
-
    private sealed class RuntimeSettings
    {
       public string ConfigPath { get; set; } = DEFAULT_CONFIG_FILE;
@@ -59,11 +50,6 @@ public class Program
       public string? SemanticScholarApiKey { get; set; }
       public int MaxConcurrency { get; set; } = 10;
       public bool Verbose { get; set; } = false;
-      public bool AiEnabled { get; set; } = false;
-      public int AiConcurrency { get; set; } = 3;
-      public string OllamaGenerateUrl { get; set; } = DocTypeClassifierLLM.DefaultOllamaGenerateUrl;
-      public string OllamaModel { get; set; } = DocTypeClassifierLLM.DefaultModel;
-      public string AiPromptPath { get; set; } = DocTypeClassifierLLM.DefaultPromptPath;
    }
 
    [STAThread]
@@ -134,7 +120,6 @@ public class Program
       Console.WriteLine($"Input: {settings.InputPath}");
       Console.WriteLine($"Output: {settings.OutputCsvPath}");
       Console.WriteLine($"Grobid: {settings.GrobidUrl}");
-      Console.WriteLine($"AI fallback: {(settings.AiEnabled ? "ENABLED" : "DISABLED")}");
       Console.WriteLine($"PDF count: {pdfFiles.Count}");
 
       using var grobidClient = new GrobidClient(settings.GrobidUrl);
@@ -155,7 +140,6 @@ public class Program
       }
 
       var notFoundSummary = new ConcurrentDictionary<string, ConcurrentBag<int>>();
-      using var llmGate = new SemaphoreSlim(Math.Max(1, settings.AiConcurrency));
 
       foreach (string pdfPath in pdfFiles)
       {
@@ -182,7 +166,7 @@ public class Program
             async item =>
             {
                var (reference, currentFileName, index) = item;
-               return await ProcessReferenceAsync(reference, currentFileName, index, settings, llmGate, notFoundSummary);
+               return await ProcessReferenceAsync(reference, currentFileName, index, settings, notFoundSummary);
             },
             new ExecutionDataflowBlockOptions
             {
@@ -236,7 +220,6 @@ public class Program
       string fileName,
       int index,
       RuntimeSettings settings,
-      SemaphoreSlim llmGate,
       ConcurrentDictionary<string, ConcurrentBag<int>> notFoundSummary)
    {
       var verifyInput = new VerifyInput(reference.DOI, reference.Title, reference.Authors, reference.Year, reference.Url);
@@ -246,37 +229,7 @@ public class Program
          settings.OpenAlexApiKey,
          settings.SemanticScholarApiKey);
 
-      DocTypeClassifierLLM.Result? docType = null;
-      bool overallFound = verifyResult.Exists;
-
-      if (!verifyResult.Exists && settings.AiEnabled)
-      {
-         await llmGate.WaitAsync();
-         try
-         {
-            docType = await DocTypeClassifierLLM.ClassifyAsync(
-               verifyInput,
-               ollamaGenerateUrl: settings.OllamaGenerateUrl,
-               model: settings.OllamaModel,
-               promptPath: settings.AiPromptPath,
-               ct: CancellationToken.None);
-         }
-         catch
-         {
-            docType = null;
-         }
-         finally
-         {
-            llmGate.Release();
-         }
-
-         if (docType != null && !string.Equals(docType.Type, "unknown", StringComparison.OrdinalIgnoreCase))
-         {
-            overallFound = true;
-         }
-      }
-
-      if (!overallFound)
+      if (!verifyResult.Exists)
       {
          notFoundSummary.GetOrAdd(fileName, _ => new ConcurrentBag<int>()).Add(index);
       }
@@ -291,23 +244,11 @@ public class Program
          }
       }
 
-      if (!verifyResult.Exists && settings.AiEnabled)
-      {
-         if (docType != null)
-         {
-            lines.Add($"[{fileName} #{index}] LLM Type: {docType.Type} (conf={docType.Confidence:F2}) reason={docType.Reason}");
-         }
-         else
-         {
-            lines.Add($"[{fileName} #{index}] LLM Type: (no result)");
-         }
-      }
-
       string idLabel = string.IsNullOrWhiteSpace(reference.DOI)
          ? $"Title: {reference.Title}"
          : $"DOI: {reference.DOI}";
 
-      lines.Add($"[{fileName} #{index}] Overall: {(overallFound ? "FOUND" : "NOT FOUND")} ({idLabel})");
+      lines.Add($"[{fileName} #{index}] Overall: {(verifyResult.Exists ? "FOUND" : "NOT FOUND")} ({idLabel})");
       return new PrintResult(lines);
    }
 
@@ -319,7 +260,6 @@ public class Program
       options.AddFlag(OPT_HELP, "print this option summary");
       options.AddFlag(OPT_VERSION, "print the current version");
       options.AddValue(OPT_OUTPUT, "path to output csv file", "", "csvFile");
-      options.AddFlag(OPT_ENABLE_AI, "enable AI fallback");
       options.AddFlag(OPT_VERBOSE, "print verification trace");
    }
 
@@ -380,7 +320,6 @@ public class Program
       string configDirectory = Directory.GetCurrentDirectory();
       string resolvedInputPath = ResolvePath(Directory.GetCurrentDirectory(), inputPath);
       string resolvedOutputCsvPath = ResolvePath(Directory.GetCurrentDirectory(), outputCsvPath);
-      string resolvedPromptPath = ResolvePath(Directory.GetCurrentDirectory(), config.Ai.PromptPath);
 
       settings = new RuntimeSettings
       {
@@ -392,18 +331,7 @@ public class Program
          OpenAlexApiKey = config.Apis.OpenAlexApiKey,
          SemanticScholarApiKey = config.Apis.SemanticScholarApiKey,
          MaxConcurrency = config.Processing.MaxConcurrency > 0 ? config.Processing.MaxConcurrency : 10,
-         Verbose = verbose,
-         AiEnabled = options.IsFlagOptionSet(OPT_ENABLE_AI),
-         AiConcurrency = config.Ai.MaxConcurrency > 0 ? config.Ai.MaxConcurrency : 3,
-         OllamaGenerateUrl = string.IsNullOrWhiteSpace(config.Ai.OllamaGenerateUrl)
-            ? DocTypeClassifierLLM.DefaultOllamaGenerateUrl
-            : config.Ai.OllamaGenerateUrl,
-         OllamaModel = string.IsNullOrWhiteSpace(config.Ai.Model)
-            ? DocTypeClassifierLLM.DefaultModel
-            : config.Ai.Model,
-         AiPromptPath = string.IsNullOrWhiteSpace(resolvedPromptPath)
-            ? ResolvePath(Directory.GetCurrentDirectory(), DocTypeClassifierLLM.DefaultPromptPath)
-            : resolvedPromptPath
+         Verbose = verbose
       };
 
       if (string.IsNullOrWhiteSpace(settings.GrobidUrl))
@@ -510,7 +438,6 @@ public class Program
    private const string OPT_HELP = "help";
    private const string OPT_VERSION = "version";
    private const string OPT_OUTPUT = "output";
-   private const string OPT_ENABLE_AI = "enableai";
    private const string OPT_VERBOSE = "verbose";
 
    private static readonly OptionManager options = new();

@@ -9,9 +9,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<None Include="doc_type_classifier.txt">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
 		<None Include="appsettings.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
