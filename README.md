@@ -1,10 +1,10 @@
 # CiteCheck
 
-**CiteCheck** is a command-line utility designed to verify the validity of bibliographic references in academic PDF files. It extracts references using Grobid and cross-references them against major academic databases to ensure they are not fabricated or incorrect.
+**CiteCheck** is a command-line utility designed to verify the validity of bibliographic references in academic PDF files. It extracts references using Grobid and cross-references them against major academic databases to ensure they are verifiable.
 
 ## Prerequisites
 
-* **Grobid Service**: You need a running instance of Grobid to parse PDF files. For testing purposes, you may use our server. (redsox.uoa.auckland.ac.nz)
+* **Grobid Service**: You need a running instance of Grobid to parse PDF files. For testing purposes, a default server (redsox.uoa.auckland.ac.nz) is provided.
 * **.NET Runtime**: Ensure you have the appropriate .NET runtime installed (Target Framework: `net10.0`).
 
 ## Configuration (`appsettings.json`)
@@ -41,8 +41,14 @@ Run the executable from your terminal.
 
 ### Basic Command Syntax
 
+Windows:
 ```powershell
-.\CiteCheck.exe -output <output_csv_path> <input_path>
+CiteCheck.exe -output <output_csv_path> <input_path>
+```
+
+Other platforms:
+```bash
+dotnet CiteCheck.dll -output <output_csv_path> <input_path>
 ```
 
 ## Examples
@@ -50,23 +56,23 @@ Run the executable from your terminal.
 ### 1. Process all PDFs in a folder
 
 ```powershell
-.\CiteCheck.exe -output "C:\Reports\failed_refs.csv" "C:\Papers\SIGCOMM25"
+CiteCheck.exe -output "C:\Reports\failed_refs.csv" "C:\Papers\SIGCOMM25"
 ```
 
 ### 2. Process a single PDF with detailed logs
 
 ```powershell
-.\CiteCheck.exe -verbose -output "C:\Reports\check.csv" "C:\Papers\my_paper.pdf"
+CiteCheck.exe -verbose -output "C:\Reports\check.csv" "C:\Papers\my_paper.pdf"
 ```
 
 ## Command Line Arguments
 
-| Option     | Description                                                                         |
-| ---------- | ----------------------------------------------------------------------------------- |
-| `-output`  | Required. Path to the CSV file where failed (`NOT FOUND`) references will be saved. |
-| `-verbose` | Optional. Prints detailed verification trace (similarity scores, API hits).         |
-| `-help`    | Displays the help message.                                                          |
-| `-version` | Displays the current version of the tool.                                           |
+| Option     | Description                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| `-output`  | Required. Path to the CSV file where unverifiable (`NOT FOUND`) references will be saved. |
+| `-verbose` | Optional. Prints detailed verification trace (similarity scores, API hits).               |
+| `-help`    | Displays the help message.                                                                |
+| `-version` | Displays the current version of the tool.                                                 |
 
 ## Output Format
 
