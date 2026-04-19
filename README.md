@@ -83,3 +83,5 @@ FileName,ReferenceIndex1,ReferenceIndex2,...
 paper1.pdf,3,7,12
 paper2.pdf,5,9
 ```
+
+If there are no unverifiable references, the CSV file will not be created.
