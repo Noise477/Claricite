@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-* **Grobid Service**: You need a running instance of Grobid to parse PDF files.
+* **Grobid Service**: You need a running instance of Grobid to parse PDF files. For testing purposes, you may use our server. (redsox.uoa.auckland.ac.nz)
 * **.NET Runtime**: Ensure you have the appropriate .NET runtime installed (Target Framework: `net10.0`).
 
 ## Configuration (`appsettings.json`)
