@@ -45,32 +45,12 @@ public static class Verifier
    private static readonly ConcurrentDictionary<string, bool> UrlExistsCache = new(StringComparer.OrdinalIgnoreCase);
 
    public static async Task<VerifyResult> CheckExistenceAsync(
-      VerifyInput q,
-      string? openAlexApiKey = null,
-      string? s2ApiKey = null,
-      CancellationToken ct = default)
+   VerifyInput q,
+   string? openAlexApiKey = null,
+   string? s2ApiKey = null,
+   CancellationToken ct = default)
    {
       var trace = new List<VerifyTraceStep>();
-
-      if (!string.IsNullOrWhiteSpace(q.Url))
-      {
-         var url = q.Url.Trim();
-         bool urlExists = await CheckUrlExistenceAsync(url, ct);
-         trace.Add(new VerifyTraceStep("Direct URL", urlExists, url));
-
-         if (urlExists)
-         {
-            var evidence = new VerifyHit(
-               Source: "Direct URL Check",
-               DOI: q.DOI,
-               Title: q.Title,
-               Authors: q.Authors,
-               Year: q.Year,
-               Url: q.Url);
-
-            return new VerifyResult(true, new List<VerifyHit> { evidence }, trace);
-         }
-      }
 
       if (!string.IsNullOrWhiteSpace(q.DOI))
       {
@@ -101,7 +81,7 @@ public static class Verifier
             if (!hasUsefulMetadata)
             {
                trace.Add(new VerifyTraceStep("DOI Metadata Check", false,
-                  "DOI is resolvable but no bibliographic metadata returned; continue with Title checks."));
+                  "DOI is resolvable but no bibliographic metadata returned; continue with URL/Title checks."));
             }
             else
             {
@@ -110,7 +90,6 @@ public static class Verifier
 
                if (!string.IsNullOrWhiteSpace(q.Title) && !string.IsNullOrWhiteSpace(evidence.Title) && !placeholderTitle)
                {
-
                   double titleSim = TitleSimilarity(q.Title, evidence.Title);
                   double authorSim = (q.Authors != null && q.Authors.Count > 0 && evidence.Authors != null && evidence.Authors.Count > 0)
                      ? AuthorDice(q.Authors, evidence.Authors)
@@ -135,15 +114,34 @@ public static class Verifier
                   return new VerifyResult(true, new List<VerifyHit> { evidence }, trace);
 
                trace.Add(new VerifyTraceStep("DOI Ignored", false,
-                  "DOI resolved but metadata does not match the citation; continue with Title checks."));
+                  "DOI resolved but metadata does not match the citation; continue with URL/Title checks."));
             }
+         }
+      }
+
+      if (!string.IsNullOrWhiteSpace(q.Url))
+      {
+         var url = q.Url.Trim();
+         bool urlExists = await CheckUrlExistenceAsync(url, ct);
+         trace.Add(new VerifyTraceStep("Direct URL", urlExists, url));
+
+         if (urlExists)
+         {
+            var evidence = new VerifyHit(
+               Source: "Direct URL Check",
+               DOI: q.DOI,
+               Title: q.Title,
+               Authors: q.Authors,
+               Year: q.Year,
+               Url: q.Url);
+
+            return new VerifyResult(true, new List<VerifyHit> { evidence }, trace);
          }
       }
 
       if (string.IsNullOrWhiteSpace(q.Title))
          return new VerifyResult(false, new List<VerifyHit>(), trace);
 
-      // OpenAlex candidates
       {
          var cands = await TryOpenAlexCandidatesByTitleAsync(q.Title, openAlexApiKey, ct);
          var hit = PickBestPassingCandidate(q, cands, out var detail, out var ok);
@@ -152,7 +150,6 @@ public static class Verifier
             return new VerifyResult(true, new List<VerifyHit> { hit }, trace);
       }
 
-      // Crossref candidates
       {
          var cands = await TryCrossrefCandidatesByTitleAsync(q.Title, ct);
          var hit = PickBestPassingCandidate(q, cands, out var detail, out var ok);
@@ -161,7 +158,6 @@ public static class Verifier
             return new VerifyResult(true, new List<VerifyHit> { hit }, trace);
       }
 
-      // Semantic Scholar candidates
       {
          var cands = await TryS2CandidatesByTitleAsync(q.Title, s2ApiKey, ct);
          var hit = PickBestPassingCandidate(q, cands, out var detail, out var ok);
@@ -170,7 +166,6 @@ public static class Verifier
             return new VerifyResult(true, new List<VerifyHit> { hit }, trace);
       }
 
-      // arXiv candidates
       {
          var arxivHit = await TryArxivByTitleAsync(q.Title, q.Authors.FirstOrDefault(), ct);
          if (arxivHit == null)
