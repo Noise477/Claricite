@@ -29,7 +29,7 @@ Before running the tool, configure the `appsettings.json` file in the applicatio
 
 ### Key Settings
 
-* `Grobid.BaseUrl`: The endpoint of your Grobid server. For testing purposes, a default server (redsox.uoa.auckland.ac.nz) is provided.
+* `Grobid.BaseUrl`: The endpoint of your Grobid server. For testing purposes, a default working endpoint is provided.
 * `Apis.OpenAlexApiKey`: Optional. Your API key for OpenAlex to improve rate limits.
 * `Apis.SemanticScholarApiKey`: Optional. Your API key for Semantic Scholar to improve rate limits.
 * `Processing.MaxConcurrency`: The number of references to verify in parallel. Default is `10`.
