@@ -1,15 +1,8 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 using CiteCheck;
 using CiteCheck.Grobid;
+using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Threading.Tasks.Dataflow;
 using Utilities.CommandLine;
 
 public class Program
