@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -211,7 +212,6 @@ public class Program
       }
 
       WriteSummaryCsv(settings.OutputCsvPath, notFoundSummary);
-      Console.WriteLine($"Summary saved to '{settings.OutputCsvPath}'");
       return 0;
    }
 
@@ -403,15 +403,23 @@ public class Program
          Directory.CreateDirectory(outDir);
       }
 
-      using var writer = new StreamWriter(outputCsvPath);
-
-      foreach (string fileName in notFoundSummary.Keys.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+      try
       {
-         if (notFoundSummary.TryGetValue(fileName, out ConcurrentBag<int>? ids))
+         using var writer = new StreamWriter(outputCsvPath);
+
+         foreach (string fileName in notFoundSummary.Keys.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
          {
-            IEnumerable<int> sortedIds = ids.OrderBy(id => id);
-            writer.WriteLine($"{EscapeCsvField(fileName)},{string.Join(",", sortedIds)}");
+            if (notFoundSummary.TryGetValue(fileName, out ConcurrentBag<int>? ids))
+            {
+               IEnumerable<int> sortedIds = ids.OrderBy(id => id);
+               writer.WriteLine($"{EscapeCsvField(fileName)},{string.Join(",", sortedIds)}");
+            }
          }
+         Console.WriteLine($"Summary saved to '{outputCsvPath}'");
+      }
+      catch (Exception ex)
+      {
+         Console.WriteLine(ex.Message);
       }
    }
 
