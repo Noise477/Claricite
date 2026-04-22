@@ -265,7 +265,7 @@ public class Program
 
    private static AppSettings LoadConfig()
    {
-      string configPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), DEFAULT_CONFIG_FILE));
+      string configPath = Path.Combine(AppContext.BaseDirectory, DEFAULT_CONFIG_FILE);
 
       if (!File.Exists(configPath))
       {
@@ -316,8 +316,8 @@ public class Program
          verbose = true;
       }
 
-      string configPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), DEFAULT_CONFIG_FILE));
-      string configDirectory = Directory.GetCurrentDirectory();
+      string configPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, DEFAULT_CONFIG_FILE));
+      string configDirectory = AppContext.BaseDirectory;
       string resolvedInputPath = ResolvePath(Directory.GetCurrentDirectory(), inputPath);
       string resolvedOutputCsvPath = ResolvePath(Directory.GetCurrentDirectory(), outputCsvPath);
 
