@@ -1,11 +1,15 @@
 using CiteCheck;
 using CiteCheck.Grobid;
+using AcademicParsing;
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -37,6 +41,9 @@ public class Program
    {
       public int MaxConcurrency { get; set; } = 10;
       public bool Verbose { get; set; } = false;
+
+      // Allowed values: grobid, local, default is local
+      public string ReferenceExtractor { get; set; } = "local";
    }
 
    private sealed class RuntimeSettings
@@ -50,6 +57,9 @@ public class Program
       public string? SemanticScholarApiKey { get; set; }
       public int MaxConcurrency { get; set; } = 10;
       public bool Verbose { get; set; } = false;
+
+      // Allowed values: grobid, local, default is local
+      public string ReferenceExtractor { get; set; } = "local";
    }
 
    [STAThread]
@@ -119,24 +129,37 @@ public class Program
       Console.WriteLine($"Config: {settings.ConfigPath}");
       Console.WriteLine($"Input: {settings.InputPath}");
       Console.WriteLine($"Output: {settings.OutputCsvPath}");
-      Console.WriteLine($"Grobid: {settings.GrobidUrl}");
+      Console.WriteLine($"Extractor: {settings.ReferenceExtractor}");
+
+      if (settings.ReferenceExtractor.Equals("grobid", StringComparison.OrdinalIgnoreCase))
+      {
+         Console.WriteLine($"Grobid: {settings.GrobidUrl}");
+      }
+
       Console.WriteLine($"PDF count: {pdfFiles.Count}");
 
-      using var grobidClient = new GrobidClient(settings.GrobidUrl);
+      GrobidClient? grobidClient = null;
 
-      try
+      if (settings.ReferenceExtractor.Equals("grobid", StringComparison.OrdinalIgnoreCase))
       {
-         Console.WriteLine($"Checking Grobid service at {settings.GrobidUrl}...");
-         if (!await grobidClient.IsAliveAsync())
+         grobidClient = new GrobidClient(settings.GrobidUrl);
+
+         try
          {
-            Console.WriteLine("Error: Grobid server is not alive.");
+            Console.WriteLine($"Checking Grobid service at {settings.GrobidUrl}...");
+            if (!await grobidClient.IsAliveAsync())
+            {
+               Console.WriteLine("Error: Grobid server is not alive.");
+               grobidClient.Dispose();
+               return 1;
+            }
+         }
+         catch (Exception ex)
+         {
+            Console.WriteLine($"Error: could not connect to Grobid. {ex.Message}");
+            grobidClient.Dispose();
             return 1;
          }
-      }
-      catch (Exception ex)
-      {
-         Console.WriteLine($"Error: could not connect to Grobid. {ex.Message}");
-         return 1;
       }
 
       var notFoundSummary = new ConcurrentDictionary<string, ConcurrentBag<int>>();
@@ -149,13 +172,12 @@ public class Program
          try
          {
             Console.WriteLine($"\nProcessing PDF: {fileName}...");
-            string teiXml = await grobidClient.ProcessReferencesAsync(pdfPath);
-            references = xmlParser.ParseTeiString(teiXml, fileName);
+            references = await ExtractReferencesAsync(pdfPath, fileName, settings, grobidClient);
             Console.WriteLine($"Extracted {references.Count} references from PDF.");
          }
          catch (Exception ex)
          {
-            Console.WriteLine($"Grobid processing failed for {fileName}: {ex.Message}");
+            Console.WriteLine($"Reference extraction failed for {fileName}: {ex.Message}");
             continue;
          }
 
@@ -202,6 +224,8 @@ public class Program
          Console.WriteLine($"Finished PDF: {fileName}");
       }
 
+      grobidClient?.Dispose();
+
       Console.WriteLine("\nVerification complete.");
 
       if (notFoundSummary.IsEmpty)
@@ -212,6 +236,90 @@ public class Program
 
       WriteSummaryCsv(settings.OutputCsvPath, notFoundSummary);
       return 0;
+   }
+
+   private static async Task<List<XmlParseResult>> ExtractReferencesAsync(
+      string pdfPath,
+      string fileName,
+      RuntimeSettings settings,
+      GrobidClient? grobidClient)
+   {
+      if (settings.ReferenceExtractor.Equals("grobid", StringComparison.OrdinalIgnoreCase))
+      {
+         if (grobidClient == null)
+         {
+            throw new InvalidOperationException("Grobid client is not initialised.");
+         }
+
+         string teiXml = await grobidClient.ProcessReferencesAsync(pdfPath);
+         return xmlParser.ParseTeiString(teiXml, fileName);
+      }
+
+      if (settings.ReferenceExtractor.Equals("local", StringComparison.OrdinalIgnoreCase))
+      {
+         return ExtractReferencesWithLocal(pdfPath, fileName);
+      }
+
+      throw new InvalidOperationException($"Unknown reference extractor: {settings.ReferenceExtractor}");
+   }
+
+   private static List<XmlParseResult> ExtractReferencesWithLocal(string pdfPath, string fileName)
+   {
+      string fullText;
+
+      using (PdfDocument document = PdfDocument.Open(pdfPath))
+      {
+         var pagesText = document.GetPages()
+            .Select(p => ContentOrderTextExtractor.GetText(p));
+
+         fullText = string.Join("\n", pagesText);
+      }
+
+      var extractor = new ReferenceExtractor();
+      var refs = extractor.Extract(fullText);
+
+      return refs
+         .Where(r => r.SkipReason == null)
+         .Select(r => new XmlParseResult(
+            SourceFile: fileName,
+            DOI: r.Doi,
+            Title: NormalizeForVerifier(r.Title),
+            Authors: r.Authors
+               .Select(NormalizeForVerifier)
+               .Where(a => !string.IsNullOrWhiteSpace(a))
+               .Select(a => a!)
+               .ToList(),
+            Year: ExtractYearFromRawCitation(r.RawCitation),
+            Url: r.Urls.FirstOrDefault()
+         ))
+         .ToList();
+   }
+
+   private static string? NormalizeForVerifier(string? s)
+   {
+      if (string.IsNullOrWhiteSpace(s)) return null;
+
+      s = s.Trim()
+         .Replace("“", "")
+         .Replace("”", "")
+         .Replace("\"", "");
+      s = Regex.Replace(s, @"^\(?\b(?:19|20)\d{2}\)?[\.\:\,\s]+", "", RegexOptions.IgnoreCase);
+
+      s = Regex.Replace(s, @"^\[Online\]\.?\s*", "", RegexOptions.IgnoreCase);
+      s = Regex.Replace(s, @"^Available:\s*", "", RegexOptions.IgnoreCase);
+
+      return string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+   }
+
+   private static string? ExtractYearFromRawCitation(string? rawCitation)
+   {
+      if (string.IsNullOrWhiteSpace(rawCitation)) return null;
+
+      var matches = Regex.Matches(rawCitation, @"\b(?:19|20)\d{2}\b");
+
+      if (matches.Count == 0) return null;
+
+      return matches[^1].Value;
    }
 
    private static async Task<PrintResult> ProcessReferenceAsync(
@@ -260,6 +368,7 @@ public class Program
       options.AddFlag(OPT_VERSION, "print the current version");
       options.AddValue(OPT_OUTPUT, "path to output csv file", "", "csvFile");
       options.AddFlag(OPT_VERBOSE, "print verification trace");
+      options.AddValue(OPT_EXTRACTOR, "reference extractor: grobid or local", "", "extractor");
    }
 
    private static AppSettings LoadConfig()
@@ -315,6 +424,30 @@ public class Program
          verbose = true;
       }
 
+      string referenceExtractor = string.IsNullOrWhiteSpace(config.Processing.ReferenceExtractor)
+         ? "grobid"
+         : config.Processing.ReferenceExtractor.Trim();
+
+      string cliExtractor = options[OPT_EXTRACTOR];
+      if (!string.IsNullOrWhiteSpace(cliExtractor))
+      {
+         referenceExtractor = cliExtractor.Trim();
+      }
+
+      referenceExtractor = referenceExtractor.ToLowerInvariant();
+
+      if (referenceExtractor == "grobidf")
+      {
+         referenceExtractor = "grobid";
+      }
+
+      if (referenceExtractor != "grobid" && referenceExtractor != "local")
+      {
+         Console.WriteLine("Error: invalid extractor.");
+         Console.WriteLine("Allowed values: grobid, local");
+         return false;
+      }
+
       string configPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, DEFAULT_CONFIG_FILE));
       string configDirectory = AppContext.BaseDirectory;
       string resolvedInputPath = ResolvePath(Directory.GetCurrentDirectory(), inputPath);
@@ -330,10 +463,11 @@ public class Program
          OpenAlexApiKey = config.Apis.OpenAlexApiKey,
          SemanticScholarApiKey = config.Apis.SemanticScholarApiKey,
          MaxConcurrency = config.Processing.MaxConcurrency > 0 ? config.Processing.MaxConcurrency : 10,
-         Verbose = verbose
+         Verbose = verbose,
+         ReferenceExtractor = referenceExtractor
       };
 
-      if (string.IsNullOrWhiteSpace(settings.GrobidUrl))
+      if (settings.ReferenceExtractor == "grobid" && string.IsNullOrWhiteSpace(settings.GrobidUrl))
       {
          Console.WriteLine("Error: Grobid.BaseUrl is empty in appsettings.json.");
          return false;
@@ -446,6 +580,7 @@ public class Program
    private const string OPT_VERSION = "version";
    private const string OPT_OUTPUT = "output";
    private const string OPT_VERBOSE = "verbose";
+   private const string OPT_EXTRACTOR = "extractor";
 
    private static readonly OptionManager options = new();
 
