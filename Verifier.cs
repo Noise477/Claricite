@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -121,7 +121,7 @@ public static class Verifier
 
       if (!string.IsNullOrWhiteSpace(q.Url))
       {
-         var url = q.Url.Trim();
+         var url = FixedUrl(q.Url.Trim());
          bool urlExists = await CheckUrlExistenceAsync(url, ct);
          trace.Add(new VerifyTraceStep("Direct URL", urlExists, url));
 
@@ -131,7 +131,7 @@ public static class Verifier
                Source: "Direct URL Check",
                DOI: q.DOI,
                Title: q.Title,
-               Authors: q.Authors,
+               Authors: q.Authors!,
                Year: q.Year,
                Url: q.Url);
 
@@ -167,7 +167,7 @@ public static class Verifier
       }
 
       {
-         var arxivHit = await TryArxivByTitleAsync(q.Title, q.Authors.FirstOrDefault(), ct);
+         var arxivHit = await TryArxivByTitleAsync(q.Title, q.Authors!.FirstOrDefault(), ct);
          if (arxivHit == null)
          {
             trace.Add(new VerifyTraceStep("arXiv Title", false, "No match"));
@@ -184,7 +184,21 @@ public static class Verifier
       return new VerifyResult(false, new List<VerifyHit>(), trace);
    }
 
+   private static string FixedUrl(string url)
+   {
+      if (string.IsNullOrEmpty(url)) return url;
 
+      if (url.IndexOfAny(BadTildes) == -1)
+      {
+         return url;
+      }
+
+      return url
+          .Replace('\u223C', '~')
+          .Replace('\u02DC', '~')
+          .Replace('\uFF5E', '~')
+          .Replace('\u223E', '~');
+   }
    private static VerifyHit? PickBestPassingCandidate(
       VerifyInput q,
       List<VerifyHit> candidates,
@@ -1039,4 +1053,6 @@ public static class Verifier
       }
       return httpUrl.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
    }
+
+   private static readonly char[] BadTildes = { '\u223C', '\u02DC', '\uFF5E', '\u223E' };
 }
