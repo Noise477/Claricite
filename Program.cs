@@ -8,7 +8,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,16 +18,9 @@ public class Program
 {
    private sealed record PrintResult(List<string> Lines);
 
-   private sealed class AppSettings
-   {
-      public GrobidSettings Grobid { get; set; } = new();
-      public ApiSettings Apis { get; set; } = new();
-      public ProcessingSettings Processing { get; set; } = new();
-   }
-
    private sealed class GrobidSettings
    {
-      public string BaseUrl { get; set; } = "https://redsox.uoa.auckland.ac.nz/grobid/";
+      public string BaseUrl { get; set; } = string.Empty;
    }
 
    private sealed class ApiSettings
@@ -41,74 +33,61 @@ public class Program
    {
       public int MaxConcurrency { get; set; } = 10;
       public bool Verbose { get; set; } = false;
-
-      // Allowed values: grobid, local, default is local
-      public string ReferenceExtractor { get; set; } = "local";
    }
 
    private sealed class RuntimeSettings
    {
-      public string ConfigPath { get; set; } = DEFAULT_CONFIG_FILE;
-      public string ConfigDirectory { get; set; } = Directory.GetCurrentDirectory();
-      public string InputPath { get; set; } = "";
-      public string OutputCsvPath { get; set; } = "";
-      public string GrobidUrl { get; set; } = "";
+      public string InputPath { get; set; } = string.Empty;
+      public string OutputCsvPath { get; set; } = string.Empty;
+      public string GrobidUrl { get; set; } = string.Empty;
       public string? OpenAlexApiKey { get; set; }
       public string? SemanticScholarApiKey { get; set; }
-      public int MaxConcurrency { get; set; } = 10;
+      public int MaxConcurrency { get; set; }
       public bool Verbose { get; set; } = false;
-
-      // Allowed values: grobid, local, default is local
-      public string ReferenceExtractor { get; set; } = "local";
+      public string ReferenceExtractor { get; set; } = REFERENCE_EXTRACTOR;
    }
 
-   [STAThread]
-   public static async Task<int> Main(string[] args)
+   public static async Task Main(string[] args)
    {
       AddOptions();
 
-      if (args.Length == 0)
+      string exePath = Environment.ProcessPath!;
+      string globalOptions = Path.ChangeExtension(exePath, ".options");
+      if (File.Exists(globalOptions))
       {
-         options.Usage();
-         return 0;
+         options.LoadOptionFile(globalOptions);
+      }
+      string localOptions = Path.ChangeExtension(Path.GetFileName(globalOptions), ".options");
+      if (File.Exists(localOptions))
+      {
+         options.LoadOptionFile(localOptions);
       }
 
       if (options.Parse(args) == false)
       {
          options.Usage();
-         return 1;
+         return;
       }
 
       if (options.IsFlagOptionSet(OPT_VERSION))
       {
          Console.WriteLine(VERSION);
-         return 0;
+         return;
       }
 
       if (options.IsFlagOptionSet(OPT_HELP))
       {
          options.Usage();
-         return 0;
+         return;
       }
 
-      AppSettings config;
-      try
+      var settings = GetRuntimeSettings();
+      int noOfFiles = options.NumberOfArguments;
+      for (int file = 0; file < noOfFiles; ++file)
       {
-         config = LoadConfig();
+         settings.InputPath = options.GetArgument(file);
+         await RunAsync(settings);
       }
-      catch (Exception ex)
-      {
-         Console.WriteLine($"Error: failed to load {DEFAULT_CONFIG_FILE}. {ex.Message}");
-         return 1;
-      }
-
-      if (TryBuildRuntimeSettings(config, out RuntimeSettings settings) == false)
-      {
-         options.Usage();
-         return 1;
-      }
-
-      return await RunAsync(settings);
    }
 
    private static async Task<int> RunAsync(RuntimeSettings settings)
@@ -126,22 +105,21 @@ public class Program
          return 1;
       }
 
-      Console.WriteLine($"Config: {settings.ConfigPath}");
       Console.WriteLine($"Input: {settings.InputPath}");
       Console.WriteLine($"Output: {settings.OutputCsvPath}");
       Console.WriteLine($"Extractor: {settings.ReferenceExtractor}");
-
-      if (settings.ReferenceExtractor.Equals("grobid", StringComparison.OrdinalIgnoreCase))
-      {
-         Console.WriteLine($"Grobid: {settings.GrobidUrl}");
-      }
-
-      Console.WriteLine($"PDF count: {pdfFiles.Count}");
 
       GrobidClient? grobidClient = null;
 
       if (settings.ReferenceExtractor.Equals("grobid", StringComparison.OrdinalIgnoreCase))
       {
+         if (string.IsNullOrWhiteSpace(settings.GrobidUrl))
+         {
+            Console.WriteLine("Error: -grobidUrl is required when using -extractor grobid.");
+            return 1;
+         }
+
+         Console.WriteLine($"Grobid: {settings.GrobidUrl}");
          grobidClient = new GrobidClient(settings.GrobidUrl);
 
          try
@@ -161,6 +139,13 @@ public class Program
             return 1;
          }
       }
+      else if (!settings.ReferenceExtractor.Equals("local", StringComparison.OrdinalIgnoreCase))
+      {
+         Console.WriteLine($"Error: unknown reference extractor '{settings.ReferenceExtractor}'. Use 'local' or 'grobid'.");
+         return 1;
+      }
+
+      Console.WriteLine($"PDF count: {pdfFiles.Count}");
 
       var notFoundSummary = new ConcurrentDictionary<string, ConcurrentBag<int>>();
 
@@ -361,149 +346,49 @@ public class Program
 
    private static void AddOptions()
    {
-      options.UsageString = "[options] <full-path-to-pdf-file-or-folder-containing-pdfs>";
+      options.UsageString = "[options] pdf_files_or_folders";
       options.IgnoreCase = true;
 
       options.AddFlag(OPT_HELP, "print this option summary");
       options.AddFlag(OPT_VERSION, "print the current version");
-      options.AddValue(OPT_OUTPUT, "path to output csv file", "", "csvFile");
+      options.AddValue(OPT_OUTPUT, "path to output csv file", "output.csv", "csvFile");
       options.AddFlag(OPT_VERBOSE, "print verification trace");
-      options.AddValue(OPT_EXTRACTOR, "reference extractor: grobid or local", "", "extractor");
+      options.AddValue(OPT_EXTRACTOR, "reference extractor: local or grobid", REFERENCE_EXTRACTOR, "extractor");
+
+      options.AddValue(OPT_MAX_CONCURRENCY, "maximum number of concurrent API calls", "10", "int");
+      options.AddValue(OPT_GROBID_URL, "URL of the GROBID server", "", "url");
+      options.AddValue(OPT_OPEN_ALEX_KEY, "OpenAlex API key", "", "key");
+      options.AddValue(OPT_SEMANTIC_SCHOLAR_KEY, "Semantic Scholar API key", "", "key");
    }
 
-   private static AppSettings LoadConfig()
+
+   private static RuntimeSettings GetRuntimeSettings()
    {
-      string configPath = Path.Combine(AppContext.BaseDirectory, DEFAULT_CONFIG_FILE);
+      var settings = new RuntimeSettings();
 
-      if (!File.Exists(configPath))
+      settings = new RuntimeSettings
       {
-         throw new FileNotFoundException("Config file not found.", configPath);
-      }
-
-      string json = File.ReadAllText(configPath);
-      var settings = JsonSerializer.Deserialize<AppSettings>(json, jsonOptions);
-
-      if (settings == null)
-      {
-         throw new InvalidOperationException("Config file is empty or invalid.");
-      }
+         InputPath = string.Empty,
+         OutputCsvPath = options[OPT_OUTPUT],
+         GrobidUrl = options[OPT_GROBID_URL],
+         OpenAlexApiKey = options[OPT_OPEN_ALEX_KEY],
+         SemanticScholarApiKey = options[OPT_SEMANTIC_SCHOLAR_KEY],
+         MaxConcurrency = int.TryParse(options[OPT_MAX_CONCURRENCY], out int parsedMaxConcurrency) && parsedMaxConcurrency > 0 ? parsedMaxConcurrency : 10,
+         Verbose = options.IsFlagOptionSet(OPT_VERBOSE),
+         ReferenceExtractor = NormalizeExtractor(options[OPT_EXTRACTOR]),
+      };
 
       return settings;
    }
 
-   private static bool TryBuildRuntimeSettings(AppSettings config, out RuntimeSettings settings)
+   private static string NormalizeExtractor(string? extractor)
    {
-      settings = new RuntimeSettings();
-
-      if (options.NumberOfArguments != 1)
+      if (string.IsNullOrWhiteSpace(extractor))
       {
-         Console.WriteLine("Error: you must provide exactly one input path.");
-         Console.WriteLine("The input path must be either:");
-         Console.WriteLine("  1) a full path to one PDF file");
-         Console.WriteLine("  2) a full path to one folder containing PDF files");
-         return false;
+         return REFERENCE_EXTRACTOR;
       }
 
-      string inputPath = options.GetArgument(0);
-      if (string.IsNullOrWhiteSpace(inputPath))
-      {
-         Console.WriteLine("Error: input path is empty.");
-         return false;
-      }
-
-      string outputCsvPath = options[OPT_OUTPUT];
-      if (string.IsNullOrWhiteSpace(outputCsvPath))
-      {
-         Console.WriteLine("Error: missing -output.");
-         return false;
-      }
-
-      bool verbose = config.Processing.Verbose;
-      if (options.IsFlagOptionSet(OPT_VERBOSE))
-      {
-         verbose = true;
-      }
-
-      string referenceExtractor = string.IsNullOrWhiteSpace(config.Processing.ReferenceExtractor)
-         ? "grobid"
-         : config.Processing.ReferenceExtractor.Trim();
-
-      string cliExtractor = options[OPT_EXTRACTOR];
-      if (!string.IsNullOrWhiteSpace(cliExtractor))
-      {
-         referenceExtractor = cliExtractor.Trim();
-      }
-
-      referenceExtractor = referenceExtractor.ToLowerInvariant();
-
-      if (referenceExtractor == "grobidf")
-      {
-         referenceExtractor = "grobid";
-      }
-
-      if (referenceExtractor != "grobid" && referenceExtractor != "local")
-      {
-         Console.WriteLine("Error: invalid extractor.");
-         Console.WriteLine("Allowed values: grobid, local");
-         return false;
-      }
-
-      string configPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, DEFAULT_CONFIG_FILE));
-      string configDirectory = AppContext.BaseDirectory;
-      string resolvedInputPath = ResolvePath(Directory.GetCurrentDirectory(), inputPath);
-      string resolvedOutputCsvPath = ResolvePath(Directory.GetCurrentDirectory(), outputCsvPath);
-
-      settings = new RuntimeSettings
-      {
-         ConfigPath = configPath,
-         ConfigDirectory = configDirectory,
-         InputPath = resolvedInputPath,
-         OutputCsvPath = resolvedOutputCsvPath,
-         GrobidUrl = config.Grobid.BaseUrl,
-         OpenAlexApiKey = config.Apis.OpenAlexApiKey,
-         SemanticScholarApiKey = config.Apis.SemanticScholarApiKey,
-         MaxConcurrency = config.Processing.MaxConcurrency > 0 ? config.Processing.MaxConcurrency : 10,
-         Verbose = verbose,
-         ReferenceExtractor = referenceExtractor
-      };
-
-      if (settings.ReferenceExtractor == "grobid" && string.IsNullOrWhiteSpace(settings.GrobidUrl))
-      {
-         Console.WriteLine("Error: Grobid.BaseUrl is empty in appsettings.json.");
-         return false;
-      }
-
-      if (!File.Exists(settings.InputPath) && !Directory.Exists(settings.InputPath))
-      {
-         Console.WriteLine("Error: input path does not exist.");
-         Console.WriteLine(settings.InputPath);
-         return false;
-      }
-
-      if (File.Exists(settings.InputPath) &&
-          !string.Equals(Path.GetExtension(settings.InputPath), ".pdf", StringComparison.OrdinalIgnoreCase))
-      {
-         Console.WriteLine("Error: input file is not a PDF file.");
-         Console.WriteLine(settings.InputPath);
-         return false;
-      }
-
-      return true;
-   }
-
-   private static string ResolvePath(string baseDirectory, string path)
-   {
-      if (string.IsNullOrWhiteSpace(path))
-      {
-         return path;
-      }
-
-      if (Path.IsPathRooted(path))
-      {
-         return Path.GetFullPath(path);
-      }
-
-      return Path.GetFullPath(Path.Combine(baseDirectory, path));
+      return extractor.Trim().ToLowerInvariant();
    }
 
    private static List<string> ResolvePdfFiles(string inputPath)
@@ -538,7 +423,7 @@ public class Program
 
       try
       {
-         using var writer = new StreamWriter(outputCsvPath);
+         using var writer = new StreamWriter(outputCsvPath, append: true);
 
          foreach (string fileName in notFoundSummary.Keys.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
          {
@@ -548,7 +433,7 @@ public class Program
                writer.WriteLine($"{EscapeCsvField(fileName)},{string.Join(",", sortedIds)}");
             }
          }
-         Console.WriteLine($"Summary saved to '{outputCsvPath}'");
+         Console.WriteLine($"Summary appended to '{outputCsvPath}'");
       }
       catch (Exception ex)
       {
@@ -573,21 +458,19 @@ public class Program
          : field;
    }
 
-   private const string VERSION = "10.04.26";
-   private const string DEFAULT_CONFIG_FILE = "appsettings.json";
+   private const string VERSION = "26.05.16";
+   private const string REFERENCE_EXTRACTOR = "local";
 
    private const string OPT_HELP = "help";
    private const string OPT_VERSION = "version";
    private const string OPT_OUTPUT = "output";
    private const string OPT_VERBOSE = "verbose";
    private const string OPT_EXTRACTOR = "extractor";
+   private const string OPT_GROBID_URL = "grobidUrl";
+   private const string OPT_OPEN_ALEX_KEY = "openAlexKey";
+   private const string OPT_SEMANTIC_SCHOLAR_KEY = "semanticScholarKey";
+   private const string OPT_MAX_CONCURRENCY = "maxConcurrency";
 
    private static readonly OptionManager options = new();
 
-   private static readonly JsonSerializerOptions jsonOptions = new()
-   {
-      PropertyNameCaseInsensitive = true,
-      ReadCommentHandling = JsonCommentHandling.Skip,
-      AllowTrailingCommas = true
-   };
 }

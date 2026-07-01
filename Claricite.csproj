@@ -10,11 +10,6 @@
 		<SelfContained>true</SelfContained>
 	</PropertyGroup>
 
-	<ItemGroup>
-		<None Include="appsettings.json">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
-	</ItemGroup>
 
 	<ItemGroup>
 	  <PackageReference Include="PdfPig" Version="0.1.15" />

@@ -1,39 +1,11 @@
-# CiteCheck
+# Claricite
 
-**CiteCheck** is a command-line utility designed to verify the validity of bibliographic references in academic PDF files. It extracts references using Grobid and cross-references them against major academic databases to ensure they are verifiable.
+**Claricite** is a command-line utility designed to verify the validity of bibliographic references in academic PDF files. It extracts references locally by default, or with Grobid when requested, and cross-references them against major academic databases to ensure they are verifiable.
 
 ## Prerequisites
 
-* **Grobid Service**: You need a running instance of Grobid to parse PDF files. For testing purposes, a default server (redsox.uoa.auckland.ac.nz) is provided.
+* **Grobid Service**: Optional. Only needed when running with `-extractor grobid`; provide the endpoint with `-grobidUrl`.
 * **.NET Runtime**: Ensure you have the appropriate .NET runtime installed (Target Framework: `net10.0`).
-
-## Configuration (`appsettings.json`)
-
-Before running the tool, configure the `appsettings.json` file in the application directory. This file manages service URLs and API credentials.
-
-```json
-{
-  "Grobid": {
-    "BaseUrl": "https://redsox.uoa.auckland.ac.nz/grobid/"
-  },
-  "Apis": {
-    "OpenAlexApiKey": "",
-    "SemanticScholarApiKey": ""
-  },
-  "Processing": {
-    "MaxConcurrency": 10,
-    "Verbose": false
-  }
-}
-```
-
-### Key Settings
-
-* `Grobid.BaseUrl`: The endpoint of your Grobid server. For testing purposes, a default working endpoint is provided.
-* `Apis.OpenAlexApiKey`: Optional. Your API key for OpenAlex to improve rate limits.
-* `Apis.SemanticScholarApiKey`: Optional. Your API key for Semantic Scholar to improve rate limits.
-* `Processing.MaxConcurrency`: The number of references to verify in parallel. Default is `10`.
-* `Processing.Verbose`: Enables detailed processing logs when set to `true`.
 
 ## Usage
 
@@ -43,40 +15,67 @@ Run the executable from your terminal.
 
 Windows:
 ```powershell
-CiteCheck.exe -output <output_csv_path> <input_path>
+Claricite.exe [options] pdf_files_or_folders
 ```
 
 Other platforms:
 ```bash
-dotnet CiteCheck.dll -output <output_csv_path> <input_path>
+dotnet Claricite.dll [options] pdf_files_or_folders
 ```
 
 ## Examples
 
-### 1. Process all PDFs in a folder
+### 1. Process all PDFs in a folder using the default local extractor
 
 ```powershell
-CiteCheck.exe -output "C:\Reports\failed_refs.csv" "C:\Papers\SIGCOMM25"
+Claricite.exe -output failed_refs.csv Papers/SIGCOMM25 
 ```
 
-### 2. Process a single PDF with detailed logs
+### 2. Process multiple PDF files and folders
 
 ```powershell
-CiteCheck.exe -verbose -output "C:\Reports\check.csv" "C:\Papers\my_paper.pdf"
+Claricite.exe -output failed_refs.csv Papers/SIGCOMM25 somepaper.pdf anotherpaper.pdf
 ```
 
-## Command Line Arguments
+### 3. Process with Grobid explicitly
 
-| Option     | Description                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------- |
-| `-output`  | Required. Path to the CSV file where unverifiable (`NOT FOUND`) references will be saved. |
-| `-verbose` | Optional. Prints detailed verification trace (similarity scores, API hits).               |
-| `-help`    | Displays the help message.                                                                |
-| `-version` | Displays the current version of the tool.                                                 |
+```powershell
+Claricite.exe -extractor grobid -grobidUrl https://www.site.org/grobid -output failed_refs.csv somepaper.pdf
+```
+
+## Command Line Options
+
+| Option                | Description                                                                               |
+| ----------------------| ----------------------------------------------------------------------------------------- |
+| `-output`             | CSV file where unverifiable references will be saved. Defaults to output.csv.             |
+| `-verbose`            | Prints detailed verification trace (similarity scores, API hits).                         |
+| `-extractor`          | Reference extractor: `local` or `grobid`. Defaults to `local`.                            |
+| `-maxConcurrency`     | Set the maximum number of concurrent API calls.                                           |
+| `-grobidUrl`          | Set the URL of the GROBID server. Required only with `-extractor grobid`.                 |
+| `-openAlexKey`        | Set the OpenAlex API key.                                                                 |
+| `-semanticScholarKey` | Set the Semantic Scholar API key.                                                         |
+| `-help`               | Display the help message.                                                                 |
+| `-version`            | Display the current version of Claricite.                                                 |
+
+Options may be specified in any of the following locations:
+
+1. On the command line
+2. In a local `Claricite.options` file in the current working directory
+3. In a global `Claricite.options` file located alongside `Claricite.exe`
+
+Precedence is applied in that order. Command-line options override local configuration values, and local configuration values override global configuration values.
+
+For example, the following Claricite.options file configures custom API keys and a concurrency limit:
+
+```txt
+-openAlexKey OA1234567890OA1234567890OA1234567890
+-semanticScholarKey SS1234567890SS1234567890SS1234567890
+-maxConcurrency 12
+```
 
 ## Output Format
 
-The tool generates a CSV file listing only the references that failed verification.
+Claricite records unverifiable references in a CSV file. One row is written for each processed document that contains one or more unverifiable references.
 
 ```csv
 FileName,ReferenceIndex1,ReferenceIndex2,...
@@ -84,4 +83,6 @@ paper1.pdf,3,7,12
 paper2.pdf,5,9
 ```
 
-If there are no unverifiable references, the CSV file will not be created.
+If the output file already exists, Claricite appends new results to the end of the file rather than overwriting existing contents.
+
+Documents with no unverifiable references are not written to the CSV file. If no processed documents contain unverifiable references, no output file is created.

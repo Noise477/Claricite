@@ -2,6 +2,7 @@
 
 using System.Collections.Generic;
 using System;
+using System.IO;
 
 namespace Utilities.CommandLine
 {
@@ -32,6 +33,53 @@ namespace Utilities.CommandLine
          UsageString = "[options] arguments";
          OptionMarker = '-';
       } // OptionManager
+
+      public void LoadOptionFile(string path)
+      {
+         if (File.Exists(path))
+         {
+            foreach (var rawLine in File.ReadAllLines(path))
+            {
+               var line = rawLine.Trim();
+
+               if (string.IsNullOrEmpty(line) || line.StartsWith("#"))
+                  continue;
+
+               var parts = line.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
+               if (parts.Length == 0)
+                  continue;
+
+               string optionName = parts[0][1..];
+               string? optionValue = (parts.Length > 1) ? parts[1] : null;
+
+               foreach (var opt in options)
+               {
+                  if (opt.visibility == Option.Visibility.Private)
+                     continue;
+
+                  string optionNameToTest = IgnoreCase ? optionName.ToUpperInvariant() : optionName;
+                  string? thisOptionName = IgnoreCase ? opt.optionName!.ToUpperInvariant() : opt.optionName;
+                  if (thisOptionName!.StartsWith(optionNameToTest, StringComparison.Ordinal))
+                  {
+                     if (opt.optionType == Option.Type.FlagOption)
+                     {
+                        opt.optionValue = "";
+                        if (optionValue != null)
+                        {
+                           Console.WriteLine($"Warning: ignoring value [{optionValue}] supplied to flag option -{opt.optionName}");
+                        }
+                     }
+                     else
+                     {
+                        opt.optionValue = optionValue;
+                     }
+
+                     break;
+                  }
+               }
+            }
+         } // file exists
+      } // LoadOptionFile
 
       public bool Parse(string[] argsIn)
       {
@@ -100,14 +148,14 @@ namespace Utilities.CommandLine
          string optionValue, string valueName, Option.Visibility visibility)
       {
          var opt = new Option
-                         {
-                            optionName = optionName,
-                            optionType = optionType,
-                            description = description,
-                            optionValue = optionValue,
-                            valueName = valueName,
-                            visibility = visibility
-                         };
+         {
+            optionName = optionName,
+            optionType = optionType,
+            description = description,
+            optionValue = optionValue,
+            valueName = valueName,
+            visibility = visibility
+         };
          options.Add(opt);
       } // Add
 
