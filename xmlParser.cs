@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
-namespace CiteCheck
+namespace ClariCite
 {
    public record XmlParseResult(
        string SourceFile,

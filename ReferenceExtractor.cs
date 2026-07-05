@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace AcademicParsing;
+namespace ClariCite;
 
 public record AcademicReference(
     string RawCitation,
@@ -62,6 +62,9 @@ public partial class ReferenceExtractor
 
    [GeneratedRegex(@"\s+")]
    private static partial Regex WhitespaceRegex();
+
+   [GeneratedRegex(@",[\p{L}\p{N}\p{Pd}]+,*$", RegexOptions.Compiled)]
+   private static partial Regex TrailingCitationGarbageRegex();
 
    private readonly int _minTitleWords = 3;
 
@@ -288,7 +291,10 @@ public partial class ReferenceExtractor
           : null;
 
       var urls = UrlRegex().Matches(rawCitation)
-          .Select(m => m.Value.TrimEnd('.', ',', ';', ')', ']'))
+          .Select(m => {
+             string clean = TrailingCitationGarbageRegex().Replace(m.Value, "");
+             return clean.TrimEnd('.', ',', ';', ')', ']');
+          })
           .Where(url => !url.Contains("doi.org", StringComparison.OrdinalIgnoreCase))
           .Distinct()
           .ToList();

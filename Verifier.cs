@@ -12,7 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace CiteCheck;
+namespace ClariCite;
 
 public record VerifyInput(string? DOI, string? Title, List<string> Authors, string? Year, string? Url);
 public record VerifyHit(string Source, string? DOI, string? Title, List<string> Authors, string? Year, string? Url);

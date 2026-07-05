@@ -6,7 +6,7 @@ using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CiteCheck.Grobid
+namespace ClariCite.Grobid
 {
    public sealed class GrobidClient : IDisposable
    {

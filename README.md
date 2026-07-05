@@ -28,26 +28,26 @@ dotnet Claricite.dll [options] pdf_files_or_folders
 ### 1. Process all PDFs in a folder using the default local extractor
 
 ```powershell
-Claricite.exe -output failed_refs.csv Papers/SIGCOMM25 
+Claricite.exe -output failed_refs.html Papers/SIGCOMM25 
 ```
 
 ### 2. Process multiple PDF files and folders
 
 ```powershell
-Claricite.exe -output failed_refs.csv Papers/SIGCOMM25 somepaper.pdf anotherpaper.pdf
+Claricite.exe -output failed_refs.html Papers/SIGCOMM25 somepaper.pdf anotherpaper.pdf
 ```
 
 ### 3. Process with Grobid explicitly
 
 ```powershell
-Claricite.exe -extractor grobid -grobidUrl https://www.site.org/grobid -output failed_refs.csv somepaper.pdf
+Claricite.exe -extractor grobid -grobidUrl https://www.site.org/grobid -output failed_refs.html somepaper.pdf
 ```
 
 ## Command Line Options
 
 | Option                | Description                                                                               |
 | ----------------------| ----------------------------------------------------------------------------------------- |
-| `-output`             | CSV file where unverifiable references will be saved. Defaults to output.csv.             |
+| `-output`             | An HTML file where unverifiable references will be saved. Defaults to output.html.        |
 | `-verbose`            | Prints detailed verification trace (similarity scores, API hits).                         |
 | `-extractor`          | Reference extractor: `local` or `grobid`. Defaults to `local`.                            |
 | `-maxConcurrency`     | Set the maximum number of concurrent API calls.                                           |
@@ -75,14 +75,8 @@ For example, the following Claricite.options file configures custom API keys and
 
 ## Output Format
 
-Claricite records unverifiable references in a CSV file. One row is written for each processed document that contains one or more unverifiable references.
-
-```csv
-FileName,ReferenceIndex1,ReferenceIndex2,...
-paper1.pdf,3,7,12
-paper2.pdf,5,9
-```
+Claricite records unverifiable references to an HTML file. 
 
 If the output file already exists, Claricite appends new results to the end of the file rather than overwriting existing contents.
 
-Documents with no unverifiable references are not written to the CSV file. If no processed documents contain unverifiable references, no output file is created.
+Documents with no unverifiable references are not written to the output file. 

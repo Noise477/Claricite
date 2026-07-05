@@ -1,8 +1,4 @@
-using CiteCheck;
-using CiteCheck.Grobid;
-using AcademicParsing;
-using UglyToad.PdfPig;
-using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
+using ClariCite.Grobid;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -12,8 +8,11 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 using Utilities.CommandLine;
 
+namespace ClariCite;
 public class Program
 {
    private sealed record PrintResult(List<string> Lines);
@@ -38,7 +37,7 @@ public class Program
    private sealed class RuntimeSettings
    {
       public string InputPath { get; set; } = string.Empty;
-      public string OutputCsvPath { get; set; } = string.Empty;
+      public string OutputFilePath { get; set; } = string.Empty;
       public string GrobidUrl { get; set; } = string.Empty;
       public string? OpenAlexApiKey { get; set; }
       public string? SemanticScholarApiKey { get; set; }
@@ -106,7 +105,7 @@ public class Program
       }
 
       Console.WriteLine($"Input: {settings.InputPath}");
-      Console.WriteLine($"Output: {settings.OutputCsvPath}");
+      Console.WriteLine($"Output: {settings.OutputFilePath}");
       Console.WriteLine($"Extractor: {settings.ReferenceExtractor}");
 
       GrobidClient? grobidClient = null;
@@ -119,12 +118,12 @@ public class Program
             return 1;
          }
 
-         Console.WriteLine($"Grobid: {settings.GrobidUrl}");
+         //Console.WriteLine($"Grobid: {settings.GrobidUrl}");
          grobidClient = new GrobidClient(settings.GrobidUrl);
 
          try
          {
-            Console.WriteLine($"Checking Grobid service at {settings.GrobidUrl}...");
+            //Console.WriteLine($"Checking Grobid service at {settings.GrobidUrl}...");
             if (!await grobidClient.IsAliveAsync())
             {
                Console.WriteLine("Error: Grobid server is not alive.");
@@ -145,9 +144,9 @@ public class Program
          return 1;
       }
 
-      Console.WriteLine($"PDF count: {pdfFiles.Count}");
+      //Console.WriteLine($"PDF count: {pdfFiles.Count}");
 
-      var notFoundSummary = new ConcurrentDictionary<string, ConcurrentBag<int>>();
+      var notFoundSummary = new ConcurrentDictionary<string, ConcurrentBag<XmlParseResult>>();
 
       foreach (string pdfPath in pdfFiles)
       {
@@ -156,7 +155,7 @@ public class Program
          List<XmlParseResult> references;
          try
          {
-            Console.WriteLine($"\nProcessing PDF: {fileName}...");
+            //Console.WriteLine($"\nProcessing PDF: {fileName}...");
             references = await ExtractReferencesAsync(pdfPath, fileName, settings, grobidClient);
             Console.WriteLine($"Extracted {references.Count} references from PDF.");
          }
@@ -206,20 +205,14 @@ public class Program
          processorBlock.Complete();
          await printBlock.Completion;
 
-         Console.WriteLine($"Finished PDF: {fileName}");
-      }
+         //Console.WriteLine($"Finished PDF: {fileName}");
+      } // foreach pdf
 
       grobidClient?.Dispose();
 
-      Console.WriteLine("\nVerification complete.");
+      Console.WriteLine($"{Environment.NewLine}Verification complete.");
 
-      if (notFoundSummary.IsEmpty)
-      {
-         Console.WriteLine("Success: all references were verified.");
-         return 0;
-      }
-
-      WriteSummaryCsv(settings.OutputCsvPath, notFoundSummary);
+      WriteSummaryFile(settings.OutputFilePath, notFoundSummary);
       return 0;
    }
 
@@ -312,7 +305,7 @@ public class Program
       string fileName,
       int index,
       RuntimeSettings settings,
-      ConcurrentDictionary<string, ConcurrentBag<int>> notFoundSummary)
+      ConcurrentDictionary<string, ConcurrentBag<XmlParseResult>> notFoundSummary)
    {
       var verifyInput = new VerifyInput(reference.DOI, reference.Title, reference.Authors, reference.Year, reference.Url);
 
@@ -323,7 +316,7 @@ public class Program
 
       if (!verifyResult.Exists)
       {
-         notFoundSummary.GetOrAdd(fileName, _ => new ConcurrentBag<int>()).Add(index);
+         notFoundSummary.GetOrAdd(fileName, _ => new ConcurrentBag<XmlParseResult>()).Add(reference);
       }
 
       var lines = new List<string>();
@@ -351,7 +344,7 @@ public class Program
 
       options.AddFlag(OPT_HELP, "print this option summary");
       options.AddFlag(OPT_VERSION, "print the current version");
-      options.AddValue(OPT_OUTPUT, "path to output csv file", "output.csv", "csvFile");
+      options.AddValue(OPT_OUTPUT, "path to output file", "output.html", "htmlFile");
       options.AddFlag(OPT_VERBOSE, "print verification trace");
       options.AddValue(OPT_EXTRACTOR, "reference extractor: local or grobid", REFERENCE_EXTRACTOR, "extractor");
 
@@ -369,7 +362,7 @@ public class Program
       settings = new RuntimeSettings
       {
          InputPath = string.Empty,
-         OutputCsvPath = options[OPT_OUTPUT],
+         OutputFilePath = options[OPT_OUTPUT],
          GrobidUrl = options[OPT_GROBID_URL],
          OpenAlexApiKey = options[OPT_OPEN_ALEX_KEY],
          SemanticScholarApiKey = options[OPT_SEMANTIC_SCHOLAR_KEY],
@@ -413,49 +406,73 @@ public class Program
       return new List<string>();
    }
 
-   private static void WriteSummaryCsv(string outputCsvPath, ConcurrentDictionary<string, ConcurrentBag<int>> notFoundSummary)
+   private static void WriteSummaryFile(string outputFilePath, ConcurrentDictionary<string, ConcurrentBag<XmlParseResult>> notFoundSummary)
    {
-      string? outDir = Path.GetDirectoryName(outputCsvPath);
+      string? outDir = Path.GetDirectoryName(outputFilePath);
       if (!string.IsNullOrWhiteSpace(outDir))
       {
          Directory.CreateDirectory(outDir);
       }
+      if (!File.Exists(outputFilePath))
+      {
+         File.WriteAllText(outputFilePath, @"
+<style>
+body {
+    font-family: system-ui, sans-serif;
+    margin: 2em;
+    max-width: 1000px;
+}
+
+h1 {
+    border-bottom: 2px solid #ccc;
+}
+
+h2 {
+    margin-top: 1.5em;
+}
+
+p {
+    margin: .4em 0;
+}
+
+ul {
+    margin-top: .2em;
+}
+
+hr {
+    margin: 2em 0;
+}
+</style>");
+      }
 
       try
       {
-         using var writer = new StreamWriter(outputCsvPath, append: true);
-
+         using var writer = new StreamWriter(outputFilePath, append: true);
+         HtmlReportWriter reportWriter = new();
          foreach (string fileName in notFoundSummary.Keys.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
          {
-            if (notFoundSummary.TryGetValue(fileName, out ConcurrentBag<int>? ids))
+            reportWriter.Heading($"{fileName}", 1);
+            if (notFoundSummary.TryGetValue(fileName, out ConcurrentBag<XmlParseResult>? references))
             {
-               IEnumerable<int> sortedIds = ids.OrderBy(id => id);
-               writer.WriteLine($"{EscapeCsvField(fileName)},{string.Join(",", sortedIds)}");
+               reportWriter.Paragraph(
+                 $"Found **{references.Count}** potential unverifiable reference(s).");
+               foreach (var reference in references)
+               {
+                  reportWriter.Heading($"[{reference.Title}] {reference.Title}", 2);
+
+                  reportWriter.DoiProperty(reference.DOI);
+                  reportWriter.LinkProperty("URL", reference.Url);
+                  reportWriter.Property("Authors", string.Join(", ", reference.Authors).ToUpperInvariant());
+               }
             }
          }
-         Console.WriteLine($"Summary appended to '{outputCsvPath}'");
+         writer.WriteLine(reportWriter.ToString());
+         Console.WriteLine($"Summary appended to '{outputFilePath}'");
       }
       catch (Exception ex)
       {
          Console.WriteLine(ex.Message);
       }
-   }
-
-   private static string EscapeCsvField(string? field)
-   {
-      if (string.IsNullOrEmpty(field))
-      {
-         return "";
-      }
-
-      if (field.Contains('"'))
-      {
-         field = field.Replace("\"", "\"\"");
-      }
-
-      return field.Contains(',') || field.Contains('"')
-         ? $"\"{field}\""
-         : field;
    }
 
    private const string VERSION = "26.05.16";
