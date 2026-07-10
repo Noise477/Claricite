@@ -7,6 +7,12 @@
 * **Grobid Service**: Optional. Only needed when running with `-extractor grobid`; provide the endpoint with `-grobidUrl`.
 * **.NET Runtime**: Ensure you have the appropriate .NET runtime installed (Target Framework: `net10.0`).
 
+## 🚀 Quick Download
+
+Get the pre-compiled, self-contained executable for your operating system (Windows, macOS, or Ubuntu Linux):
+
+👉 **[Download Latest Claricite Binaries Here](https://github.com/Noise477/Claricite/releases/latest)**
+
 ## Usage
 
 Run the executable from your terminal.
