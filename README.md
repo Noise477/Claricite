@@ -12,6 +12,7 @@
 Get the pre-compiled, self-contained executable for your operating system (Windows, macOS, or Ubuntu Linux):
 
 👉 **[Download Latest Claricite Binaries Here](https://github.com/Noise477/Claricite/releases/latest)**
+(Click and expand the **"Assets"** section at the bottom of the page to see the files).
 
 ## Usage
 
