@@ -1,0 +1,95 @@
+name: Publish Claricite Production Releases
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers workflow on any tag starting with v (e.g., v1.0.0)
+  workflow_dispatch: # Allows us to still trigger a manual test run if needed
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for GitHub Actions to create a Release and upload assets
+    
+    strategy:
+      matrix:
+        include:
+          # Windows Targets
+          - os-name: Windows-x64
+            rid: win-x64
+            suffix: .exe
+          - os-name: Windows-Arm64
+            rid: win-arm64
+            suffix: .exe
+
+          # MacOS Targets
+          - os-name: MacOS-AppleSilicon
+            rid: osx-arm64
+            suffix: ''
+          - os-name: MacOS-Intel
+            rid: osx-x64
+            suffix: ''
+
+          # Ubuntu / Linux Targets
+          - os-name: Ubuntu-Linux-x64
+            rid: linux-x64
+            suffix: ''
+          - os-name: Ubuntu-Linux-Arm64
+            rid: linux-arm64
+            suffix: ''
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Get Version From Tag
+      id: get_version
+      run: |
+        # Extracts tag name (e.g., v1.2.3) or uses 'manual' if triggered via workflow_dispatch
+        VERSION=${GITHUB_REF#refs/tags/}
+        if [ "$VERSION" = "refs/heads/main" ] || [ -z "$VERSION" ]; then VERSION="manual"; fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        
+        # Strip the 'v' prefix if present for the standard .NET version identifier property
+        DOTNET_VER=$(echo $VERSION | sed 's/^v//')
+        echo "dotnet_version=$DOTNET_VER" >> $GITHUB_OUTPUT
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore Dependencies
+      run: dotnet restore
+
+    - name: Compile and Publish Binary
+      run: |
+        # Injects the tag version straight into assembly properties during compilation
+        dotnet publish -c Release \
+          -r ${{ matrix.rid }} \
+          /p:Version=${{ steps.get_version.outputs.dotnet_version }} \
+          -o ./output/${{ matrix.os-name }}
+
+    - name: Package Binary into Zip
+      id: package
+      run: |
+        # Standardizes naming structure to: Claricite-v1.0.0-Windows-x64.zip
+        ZIP_NAME="Claricite-${{ steps.get_version.outputs.version }}-${{ matrix.os-name }}.zip"
+        cd ./output/${{ matrix.os-name }}
+        
+        # Ensure executable permissions are preserved for macOS and Linux binaries inside the zip
+        if [ "${{ matrix.suffix }}" = "" ]; then
+          chmod +x Claricite
+        fi
+        
+        zip -r ../../$ZIP_NAME ./*
+        cd ../../
+        echo "zip_path=$ZIP_NAME" >> $GITHUB_OUTPUT
+
+    - name: Upload to GitHub Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: ${{ steps.package.outputs.zip_path }}
+        generate_release_notes: true # Automatically generate a changelog based on commit messages
