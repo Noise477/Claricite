@@ -44,6 +44,7 @@ public class Program
       public int MaxConcurrency { get; set; }
       public bool Verbose { get; set; } = false;
       public string ReferenceExtractor { get; set; } = REFERENCE_EXTRACTOR;
+      public string ReferenceStyle { get; set; } = REFERENCE_STYLE;
    }
 
    public static async Task Main(string[] args)
@@ -107,6 +108,10 @@ public class Program
       Console.WriteLine($"Input: {settings.InputPath}");
       Console.WriteLine($"Output: {settings.OutputFilePath}");
       Console.WriteLine($"Extractor: {settings.ReferenceExtractor}");
+      if (settings.ReferenceExtractor.Equals("local", StringComparison.OrdinalIgnoreCase))
+      {
+         Console.WriteLine($"Style: {settings.ReferenceStyle}");
+      }
 
       GrobidClient? grobidClient = null;
 
@@ -141,6 +146,13 @@ public class Program
       else if (!settings.ReferenceExtractor.Equals("local", StringComparison.OrdinalIgnoreCase))
       {
          Console.WriteLine($"Error: unknown reference extractor '{settings.ReferenceExtractor}'. Use 'local' or 'grobid'.");
+         return 1;
+      }
+
+      if (settings.ReferenceExtractor.Equals("local", StringComparison.OrdinalIgnoreCase) &&
+          !TryParseReferenceStyle(settings.ReferenceStyle, out _))
+      {
+         Console.WriteLine($"Error: unknown reference style '{settings.ReferenceStyle}'. Use 'default' or 'ieee'.");
          return 1;
       }
 
@@ -235,13 +247,13 @@ public class Program
 
       if (settings.ReferenceExtractor.Equals("local", StringComparison.OrdinalIgnoreCase))
       {
-         return ExtractReferencesWithLocal(pdfPath, fileName);
+         return ExtractReferencesWithLocal(pdfPath, fileName, settings.ReferenceStyle);
       }
 
       throw new InvalidOperationException($"Unknown reference extractor: {settings.ReferenceExtractor}");
    }
 
-   private static List<XmlParseResult> ExtractReferencesWithLocal(string pdfPath, string fileName)
+   private static List<XmlParseResult> ExtractReferencesWithLocal(string pdfPath, string fileName, string referenceStyle)
    {
       string fullText;
 
@@ -253,7 +265,12 @@ public class Program
          fullText = string.Join("\n", pagesText);
       }
 
-      var extractor = new ReferenceExtractor();
+      if (!TryParseReferenceStyle(referenceStyle, out LocalReferenceStyle parsedStyle))
+      {
+         throw new InvalidOperationException($"Unknown reference style: {referenceStyle}");
+      }
+
+      var extractor = new ReferenceExtractor(parsedStyle);
       var refs = extractor.Extract(fullText);
 
       return refs
@@ -347,6 +364,7 @@ public class Program
       options.AddValue(OPT_OUTPUT, "path to output file", "output.html", "htmlFile");
       options.AddFlag(OPT_VERBOSE, "print verification trace");
       options.AddValue(OPT_EXTRACTOR, "reference extractor: local or grobid", REFERENCE_EXTRACTOR, "extractor");
+      options.AddValue(OPT_STYLE, "local reference style: default or ieee", REFERENCE_STYLE, "style");
 
       options.AddValue(OPT_MAX_CONCURRENCY, "maximum number of concurrent API calls", "10", "int");
       options.AddValue(OPT_GROBID_URL, "URL of the GROBID server", "", "url");
@@ -369,6 +387,7 @@ public class Program
          MaxConcurrency = int.TryParse(options[OPT_MAX_CONCURRENCY], out int parsedMaxConcurrency) && parsedMaxConcurrency > 0 ? parsedMaxConcurrency : 10,
          Verbose = options.IsFlagOptionSet(OPT_VERBOSE),
          ReferenceExtractor = NormalizeExtractor(options[OPT_EXTRACTOR]),
+         ReferenceStyle = NormalizeReferenceStyle(options[OPT_STYLE]),
       };
 
       return settings;
@@ -382,6 +401,32 @@ public class Program
       }
 
       return extractor.Trim().ToLowerInvariant();
+   }
+
+   private static string NormalizeReferenceStyle(string? style)
+   {
+      if (string.IsNullOrWhiteSpace(style))
+      {
+         return REFERENCE_STYLE;
+      }
+
+      return style.Trim().ToLowerInvariant();
+   }
+
+   private static bool TryParseReferenceStyle(string? style, out LocalReferenceStyle parsedStyle)
+   {
+      switch (NormalizeReferenceStyle(style))
+      {
+         case "default":
+            parsedStyle = LocalReferenceStyle.Default;
+            return true;
+         case "ieee":
+            parsedStyle = LocalReferenceStyle.Ieee;
+            return true;
+         default:
+            parsedStyle = LocalReferenceStyle.Default;
+            return false;
+      }
    }
 
    private static List<string> ResolvePdfFiles(string inputPath)
@@ -475,14 +520,16 @@ hr {
       }
    }
 
-   private const string VERSION = "26.05.16";
+   private const string VERSION = "26.07.16";
    private const string REFERENCE_EXTRACTOR = "local";
+   private const string REFERENCE_STYLE = "default";
 
    private const string OPT_HELP = "help";
    private const string OPT_VERSION = "version";
    private const string OPT_OUTPUT = "output";
    private const string OPT_VERBOSE = "verbose";
    private const string OPT_EXTRACTOR = "extractor";
+   private const string OPT_STYLE = "style";
    private const string OPT_GROBID_URL = "grobidUrl";
    private const string OPT_OPEN_ALEX_KEY = "openAlexKey";
    private const string OPT_SEMANTIC_SCHOLAR_KEY = "semanticScholarKey";

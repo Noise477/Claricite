@@ -44,7 +44,15 @@ Claricite.exe -output failed_refs.html Papers/SIGCOMM25
 Claricite.exe -output failed_refs.html Papers/SIGCOMM25 somepaper.pdf anotherpaper.pdf
 ```
 
-### 3. Process with Grobid explicitly
+### 3. Force IEEE-style local reference parsing
+
+```powershell
+Claricite.exe -style ieee -output failed_refs.html somepaper.pdf
+```
+
+When `-style ieee` is selected, the local extractor uses only IEEE bracket-numbered reference segmentation such as `[1]`, `[2]`, and `[3]`. If `-style` is omitted, Claricite keeps the existing automatic/default parser.
+
+### 4. Process with Grobid explicitly
 
 ```powershell
 Claricite.exe -extractor grobid -grobidUrl https://www.site.org/grobid -output failed_refs.html somepaper.pdf
@@ -57,6 +65,7 @@ Claricite.exe -extractor grobid -grobidUrl https://www.site.org/grobid -output f
 | `-output`             | An HTML file where unverifiable references will be saved. Defaults to output.html.        |
 | `-verbose`            | Prints detailed verification trace (similarity scores, API hits).                         |
 | `-extractor`          | Reference extractor: `local` or `grobid`. Defaults to `local`.                            |
+| `-style`              | Local reference style: `default` or `ieee`. Defaults to `default`.                       |
 | `-maxConcurrency`     | Set the maximum number of concurrent API calls.                                           |
 | `-grobidUrl`          | Set the URL of the GROBID server. Required only with `-extractor grobid`.                 |
 | `-openAlexKey`        | Set the OpenAlex API key.                                                                 |
@@ -78,6 +87,7 @@ For example, the following Claricite.options file configures custom API keys and
 -openAlexKey OA1234567890OA1234567890OA1234567890
 -semanticScholarKey SS1234567890SS1234567890SS1234567890
 -maxConcurrency 12
+-style ieee
 ```
 
 ## Output Format

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -15,6 +15,12 @@ public record AcademicReference(
     int OriginalNumber,
     string? SkipReason
 );
+
+public enum LocalReferenceStyle
+{
+   Default,
+   Ieee
+}
 
 public partial class ReferenceExtractor
 {
@@ -67,6 +73,12 @@ public partial class ReferenceExtractor
    private static partial Regex TrailingCitationGarbageRegex();
 
    private readonly int _minTitleWords = 3;
+   private readonly LocalReferenceStyle _style;
+
+   public ReferenceExtractor(LocalReferenceStyle style = LocalReferenceStyle.Default)
+   {
+      _style = style;
+   }
 
    public List<AcademicReference> Extract(string pdfText)
    {
@@ -139,6 +151,15 @@ public partial class ReferenceExtractor
 
    private List<Segment> SegmentReferences(string text)
    {
+      if (_style == LocalReferenceStyle.Ieee)
+      {
+         // The user has explicitly identified the citation style, so do not let
+         // another automatic strategy win. A short bibliography is also valid.
+         return TryIeeeFormat(text, minimumReferenceCount: 1) ?? new List<Segment>();
+      }
+
+      // Default mode intentionally preserves the original automatic strategy
+      // selection and its thresholds.
       var strategies = new List<StrategyResult>();
 
       var ieeeRefs = TryIeeeFormat(text);
@@ -175,10 +196,10 @@ public partial class ReferenceExtractor
           .ToList();
    }
 
-   private List<Segment>? TryIeeeFormat(string text)
+   private List<Segment>? TryIeeeFormat(string text, int minimumReferenceCount = 3)
    {
       var matches = IeeeSegmentRegex().Matches(text);
-      if (matches.Count < 3) return null;
+      if (matches.Count < minimumReferenceCount) return null;
 
       var firstNums = matches.Take(5)
           .Select(m => int.TryParse(m.Groups[1].Value, out int n) ? n : -1)
