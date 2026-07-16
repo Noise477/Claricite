@@ -152,7 +152,7 @@ public class Program
       if (settings.ReferenceExtractor.Equals("local", StringComparison.OrdinalIgnoreCase) &&
           !TryParseReferenceStyle(settings.ReferenceStyle, out _))
       {
-         Console.WriteLine($"Error: unknown reference style '{settings.ReferenceStyle}'. Use 'default' or 'ieee'.");
+         Console.WriteLine($"Error: unknown reference style '{settings.ReferenceStyle}'. Use 'default', 'ieee', or 'acm'.");
          return 1;
       }
 
@@ -284,7 +284,7 @@ public class Program
                .Where(a => !string.IsNullOrWhiteSpace(a))
                .Select(a => a!)
                .ToList(),
-            Year: ExtractYearFromRawCitation(r.RawCitation),
+            Year: ExtractYearFromRawCitation(r.RawCitation, parsedStyle),
             Url: r.Urls.FirstOrDefault()
          ))
          .ToList();
@@ -306,14 +306,22 @@ public class Program
       return string.IsNullOrWhiteSpace(s) ? null : s.Trim();
    }
 
-   private static string? ExtractYearFromRawCitation(string? rawCitation)
+   private static string? ExtractYearFromRawCitation(
+      string? rawCitation,
+      LocalReferenceStyle referenceStyle)
    {
       if (string.IsNullOrWhiteSpace(rawCitation)) return null;
 
       var matches = Regex.Matches(rawCitation, @"\b(?:19|20)\d{2}\b");
-
       if (matches.Count == 0) return null;
 
+      // ACM puts the publication year immediately after the author list.
+      // Using the first year avoids mistaking retrieval dates or conference
+      // dates later in the citation for the publication year.
+      if (referenceStyle == LocalReferenceStyle.Acm)
+         return matches[0].Value;
+
+      // Preserve the original behaviour for default and IEEE modes.
       return matches[^1].Value;
    }
 
@@ -364,7 +372,7 @@ public class Program
       options.AddValue(OPT_OUTPUT, "path to output file", "output.html", "htmlFile");
       options.AddFlag(OPT_VERBOSE, "print verification trace");
       options.AddValue(OPT_EXTRACTOR, "reference extractor: local or grobid", REFERENCE_EXTRACTOR, "extractor");
-      options.AddValue(OPT_STYLE, "local reference style: default or ieee", REFERENCE_STYLE, "style");
+      options.AddValue(OPT_STYLE, "local reference style: default, ieee, or acm", REFERENCE_STYLE, "style");
 
       options.AddValue(OPT_MAX_CONCURRENCY, "maximum number of concurrent API calls", "10", "int");
       options.AddValue(OPT_GROBID_URL, "URL of the GROBID server", "", "url");
@@ -422,6 +430,9 @@ public class Program
             return true;
          case "ieee":
             parsedStyle = LocalReferenceStyle.Ieee;
+            return true;
+         case "acm":
+            parsedStyle = LocalReferenceStyle.Acm;
             return true;
          default:
             parsedStyle = LocalReferenceStyle.Default;
@@ -520,7 +531,7 @@ hr {
       }
    }
 
-   private const string VERSION = "26.07.16";
+   private const string VERSION = "26.07.16.1";
    private const string REFERENCE_EXTRACTOR = "local";
    private const string REFERENCE_STYLE = "default";
 

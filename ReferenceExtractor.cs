@@ -19,7 +19,8 @@ public record AcademicReference(
 public enum LocalReferenceStyle
 {
    Default,
-   Ieee
+   Ieee,
+   Acm
 }
 
 public partial class ReferenceExtractor
@@ -50,6 +51,9 @@ public partial class ReferenceExtractor
 
    [GeneratedRegex(@"(?m)(?:^|\n)\s*(\d{1,3})\.\s+")]
    private static partial Regex NumberedSegmentRegex();
+
+   [GeneratedRegex(@"(?m)(?:^|\n|[\.\]0-9])\s*\[(\d+)\]\s*")]
+   private static partial Regex AcmBracketSegmentRegex();
 
    [GeneratedRegex(@"([a-z0-9)/]|[A-Z]{2})\.\n(?:\d{1,4}\n)?\s*([a-zA-Z\u00C0-\u024F\- ]+,\s+[A-Z]\.)")]
    private static partial Regex AaaiSegmentRegex();
@@ -158,6 +162,13 @@ public partial class ReferenceExtractor
          return TryIeeeFormat(text, minimumReferenceCount: 1) ?? new List<Segment>();
       }
 
+      if (_style == LocalReferenceStyle.Acm)
+      {
+         // ACM references are normally numbered in square brackets. Keep this
+         // separate from IEEE because ACM field order is Authors. Year. Title.
+         return TryAcmFormat(text, minimumReferenceCount: 1) ?? new List<Segment>();
+      }
+
       // Default mode intentionally preserves the original automatic strategy
       // selection and its thresholds.
       var strategies = new List<StrategyResult>();
@@ -220,6 +231,56 @@ public partial class ReferenceExtractor
          int start = matches[i].Index + matches[i].Length;
          int end = i + 1 < matches.Count ? matches[i + 1].Index : text.Length;
 
+         string content = text[start..end].Trim();
+
+         if (!string.IsNullOrWhiteSpace(content))
+            refs.Add(new Segment(content, int.Parse(matches[i].Groups[1].Value)));
+      }
+
+      return refs;
+   }
+
+
+   private List<Segment>? TryAcmFormat(string text, int minimumReferenceCount = 1)
+   {
+      // Published ACM papers normally use [1], [2], ... . Some PDF extraction
+      // paths lose the brackets, so accept 1., 2., ... as a conservative fallback.
+      var bracketMatches = AcmBracketSegmentRegex().Matches(text);
+      var bracketed = BuildAcmSegments(text, bracketMatches, minimumReferenceCount);
+      if (bracketed != null)
+         return bracketed;
+
+      var numberedMatches = NumberedSegmentRegex().Matches(text);
+      return BuildAcmSegments(text, numberedMatches, minimumReferenceCount);
+   }
+
+   private static List<Segment>? BuildAcmSegments(
+      string text,
+      MatchCollection matches,
+      int minimumReferenceCount)
+   {
+      if (matches.Count < minimumReferenceCount)
+         return null;
+
+      var firstNums = matches.Take(5)
+         .Select(m => int.TryParse(m.Groups[1].Value, out int n) ? n : -1)
+         .ToList();
+
+      if (firstNums.Count == 0 || firstNums[0] != 1)
+         return null;
+
+      for (int i = 0; i < firstNums.Count - 1; i++)
+      {
+         if (firstNums[i + 1] != firstNums[i] + 1)
+            return null;
+      }
+
+      var refs = new List<Segment>();
+
+      for (int i = 0; i < matches.Count; i++)
+      {
+         int start = matches[i].Index + matches[i].Length;
+         int end = i + 1 < matches.Count ? matches[i + 1].Index : text.Length;
          string content = text[start..end].Trim();
 
          if (!string.IsNullOrWhiteSpace(content))
@@ -320,7 +381,9 @@ public partial class ReferenceExtractor
           .Distinct()
           .ToList();
 
-      var parsedMain = ExtractMainFields(rawCitation, prevAuthors);
+      var parsedMain = _style == LocalReferenceStyle.Acm
+         ? ExtractAcmMainFields(rawCitation)
+         : ExtractMainFields(rawCitation, prevAuthors);
 
       string? title = parsedMain.Title;
       List<string> authors = parsedMain.Authors;
@@ -362,6 +425,141 @@ public partial class ReferenceExtractor
    }
 
    private record MainFields(string? Title, List<string> Authors);
+
+   private MainFields ExtractAcmMainFields(string text)
+   {
+      // Standard ACM Reference Format:
+      // Authors. Year. Title. Publication information.
+      var yearMatch = Regex.Match(
+         text,
+         @"(?<!\d)(?<year>(?:18|19|20)\d{2}[a-z]?)\.\s+",
+         RegexOptions.IgnoreCase
+      );
+
+      if (yearMatch.Success)
+      {
+         string authorsPart = text[..yearMatch.Index].Trim().TrimEnd('.', ',', ';');
+         string remainder = text[(yearMatch.Index + yearMatch.Length)..].Trim();
+         string? title = ExtractAcmTitle(remainder);
+         var authors = SplitAcmAuthors(authorsPart);
+
+         if (!string.IsNullOrWhiteSpace(title) && authors.Count > 0)
+            return new MainFields(title, authors);
+      }
+
+      // ACM also permits web/corporate references without an explicit year,
+      // e.g. "ACM. Association for Computing Machinery... Retrieved from ...".
+      var firstBoundary = FindAcmSentenceBoundary(text);
+      if (firstBoundary >= 0)
+      {
+         string authorsPart = text[..(firstBoundary + 1)].Trim().TrimEnd('.', ',', ';');
+         string remainder = text[(firstBoundary + 1)..].Trim();
+         string? title = ExtractAcmTitle(remainder);
+         var authors = SplitAcmAuthors(authorsPart);
+
+         if (!string.IsNullOrWhiteSpace(title) && authors.Count > 0)
+            return new MainFields(title, authors);
+      }
+
+      // Do not route ACM through the IEEE-oriented heuristics: returning a
+      // null title is safer than silently treating the publication year as one.
+      return new MainFields(null, new List<string>());
+   }
+
+   private static string? ExtractAcmTitle(string remainder)
+   {
+      if (string.IsNullOrWhiteSpace(remainder))
+         return null;
+
+      int boundary = FindAcmSentenceBoundary(remainder);
+      string title = boundary >= 0
+         ? remainder[..(boundary + 1)]
+         : StripAcmTrailingMetadata(remainder);
+
+      title = title.Trim().TrimEnd('.', '?', '!', ',', ';');
+      return string.IsNullOrWhiteSpace(title) ? null : title;
+   }
+
+   private static int FindAcmSentenceBoundary(string text)
+   {
+      for (int i = 0; i < text.Length; i++)
+      {
+         char c = text[i];
+         if (c != '.' && c != '?' && c != '!')
+            continue;
+
+         if (i + 1 < text.Length && !char.IsWhiteSpace(text[i + 1]))
+            continue;
+
+         if (c == '.' && IsAcmAbbreviationAt(text, i))
+            continue;
+
+         return i;
+      }
+
+      return -1;
+   }
+
+   private static bool IsAcmAbbreviationAt(string text, int periodIndex)
+   {
+      string prefix = text[..(periodIndex + 1)];
+
+      // Initials and dotted abbreviations: "S.", "U.S.", "Ph.D.".
+      if (Regex.IsMatch(prefix, @"(?:^|\s)[A-Z]\.$") ||
+          Regex.IsMatch(prefix, @"(?:^|\s)(?:[A-Za-z]{1,3}\.){2,}$"))
+      {
+         return true;
+      }
+
+      // Common abbreviations occurring inside ACM titles and book metadata.
+      if (Regex.IsMatch(
+         prefix,
+         @"(?i)\b(?:e\.g|i\.e|vs|vol|no|fig|eq|dr|prof|st|jr|sr|ed|eds)\.$"
+      ))
+      {
+         return true;
+      }
+
+      // Edition ordinals such as "2nd. ed." are not sentence endings.
+      return Regex.IsMatch(prefix, @"(?i)\b\d+(?:st|nd|rd|th)\.$");
+   }
+
+   private static string StripAcmTrailingMetadata(string text)
+   {
+      int doiIndex = text.IndexOf("https://doi.org/", StringComparison.OrdinalIgnoreCase);
+      int urlIndex = text.IndexOf("http://", StringComparison.OrdinalIgnoreCase);
+      int httpsIndex = text.IndexOf("https://", StringComparison.OrdinalIgnoreCase);
+      int retrievedIndex = text.IndexOf(" Retrieved ", StringComparison.OrdinalIgnoreCase);
+
+      var indexes = new[] { doiIndex, urlIndex, httpsIndex, retrievedIndex }
+         .Where(i => i > 0)
+         .ToList();
+
+      int end = indexes.Count > 0 ? indexes.Min() : text.Length;
+      return text[..end].Trim();
+   }
+
+   private static List<string> SplitAcmAuthors(string authorsPart)
+   {
+      authorsPart = authorsPart.Trim().TrimEnd('.', ',', ';');
+      if (string.IsNullOrWhiteSpace(authorsPart))
+         return new List<string>();
+
+      // Do not turn "et al." into an author token. Preserve all explicitly
+      // listed names before it.
+      authorsPart = Regex.Replace(
+         authorsPart,
+         @"(?i)(?:,?\s+(?:and\s+)?)et\s+al\.?$",
+         ""
+      ).Trim().TrimEnd(',', ';');
+
+      var authors = Regex.Split(authorsPart, @",\s+(?:and\s+)?|\s+and\s+")
+         .Select(a => a.Trim().TrimEnd('.', ',', ';'))
+         .Where(a => !string.IsNullOrWhiteSpace(a))
+         .ToList();
+
+      return authors.Count > 0 ? authors : new List<string> { authorsPart };
+   }
 
    private MainFields ExtractMainFields(string text, List<string> prevAuthors)
    {
