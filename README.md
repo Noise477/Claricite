@@ -51,7 +51,7 @@ Claricite.exe [options] pdf_files_or_folders
 
 Other platforms:
 ```bash
-dotnet Claricite.dll [options] pdf_files_or_folders
+Claricite [options] pdf_files_or_folders
 ```
 
 ## Examples
@@ -90,7 +90,7 @@ The ACM parser expects numbered references and extracts the standard ACM order s
 
 It supports normal ACM journal, conference, book, thesis, technical-report, web, and arXiv entries. The ACM parser is independent from the IEEE parser because ACM normally places the publication year between the author list and the title.
 
-### 5. Process with Grobid explicitly
+### 5. Process with Grobid
 
 ```powershell
 Claricite.exe -extractor grobid -grobidUrl http://localhost:8070 -output failed_refs.html somepaper.pdf
