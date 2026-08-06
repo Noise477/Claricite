@@ -38,40 +38,37 @@ Get the pre-compiled, self-contained executable for your operating system (Windo
 👉 **[Download Latest Claricite Binaries Here](https://github.com/Noise477/Claricite/releases/latest)**
 (Click and expand the **"Assets"** section at the bottom of the page to see the files).
 
+💡 **Pro-Tip:** Extract the downloaded binary and add it to your system's `PATH` to run the `claricite` command globally from any terminal or command prompt.
+
 ## Usage
 
 Run the executable from your terminal.
 
 ### Basic Command Syntax
 
-Windows:
 ```powershell
-Claricite.exe [options] pdf_files_or_folders
+claricite [options] pdf_files_or_folders
 ```
 
-Other platforms:
-```bash
-Claricite [options] pdf_files_or_folders
-```
 
 ## Examples
 
 ### 1. Process all PDFs in a folder using the default local extractor
 
 ```powershell
-Claricite.exe -output failed_refs.html Papers/SIGCOMM25 
+claricite -output failed_refs.html Papers/SIGCOMM25 
 ```
 
 ### 2. Process multiple PDF files and folders
 
 ```powershell
-Claricite.exe -output failed_refs.html Papers/SIGCOMM25 somepaper.pdf anotherpaper.pdf
+claricite -output failed_refs.html Papers/SIGCOMM25 somepaper.pdf anotherpaper.pdf
 ```
 
 ### 3. Force IEEE-style local reference parsing
 
 ```powershell
-Claricite.exe -style ieee -output failed_refs.html somepaper.pdf
+claricite -style ieee -output failed_refs.html somepaper.pdf
 ```
 
 When `-style ieee` is selected, the local extractor uses only IEEE bracket-numbered reference segmentation such as `[1]`, `[2]`, and `[3]`. If `-style` is omitted, Claricite keeps the existing automatic/default parser.
@@ -79,7 +76,7 @@ When `-style ieee` is selected, the local extractor uses only IEEE bracket-numbe
 ### 4. Force ACM Reference Format parsing
 
 ```powershell
-Claricite.exe -style acm -output failed_refs.html somepaper.pdf
+claricite -style acm -output failed_refs.html somepaper.pdf
 ```
 
 The ACM parser expects numbered references and extracts the standard ACM order separately:
@@ -93,7 +90,7 @@ It supports normal ACM journal, conference, book, thesis, technical-report, web,
 ### 5. Process with Grobid
 
 ```powershell
-Claricite.exe -extractor grobid -grobidUrl http://localhost:8070 -output failed_refs.html somepaper.pdf
+claricite -extractor grobid -grobidUrl http://localhost:8070 -output failed_refs.html somepaper.pdf
 ```
 
 ## Command Line Options
@@ -115,7 +112,7 @@ Options may be specified in any of the following locations:
 
 1. On the command line
 2. In a local `Claricite.options` file in the current working directory
-3. In a global `Claricite.options` file located alongside `Claricite.exe`
+3. In a global `Claricite.options` file located alongside `claricite`
 
 Precedence is applied in that order. Command-line options override local configuration values, and local configuration values override global configuration values.
 
