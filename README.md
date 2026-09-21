@@ -22,7 +22,7 @@ The `full` image is recommended because it includes the machine-learning models 
 On an Apple Silicon Mac, add `--platform linux/amd64` if Docker reports a platform mismatch:
 
 ```bash
-docker run -d --name grobid  --platform linux/amd64 --restart unless-stopped --platform linux/amd64 --init --ulimit core=0 -p 8070:8070 grobid/grobid:latest-full
+docker run -d --name grobid --restart unless-stopped --platform linux/amd64 --init --ulimit core=0 -p 8070:8070 grobid/grobid:latest-full
 ```
 
 To stop the service:
