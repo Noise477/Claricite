@@ -474,31 +474,74 @@ public class Program
          File.WriteAllText(outputFilePath, @"
 <style>
 body {
-    font-family: system-ui, sans-serif;
-    margin: 2em;
-    max-width: 1000px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 3em auto;
+    max-width: 850px;
+    line-height: 1.5;
+    color: #333;
+    padding: 0 1em;
 }
 
 h1 {
-    border-bottom: 2px solid #ccc;
+    font-size: 1.6em;
+    color: #1a202c;
+    margin-top: 3em;
+    padding-bottom: 0.4em;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+h1:first-of-type {
+    margin-top: 1em;
+}
+
+h1 + p {
+    font-size: 0.95em;
+    color: #4a5568;
+    margin-bottom: 1.5em;
 }
 
 h2 {
-    margin-top: 1.5em;
+    background-color: #f8fafc;
+    border-left: 4px solid #ef4444;
+    margin: 1.5em 0 0 0;
+    padding: 1em 1.2em 0.2em 1.2em;
+    font-size: 1.05em;
+    color: #1e293b;
 }
 
-p {
-    margin: .4em 0;
+h2 + p, 
+h2 + p + p, 
+h2 + p + p + p {
+    background-color: #f8fafc;
+    margin: 0;
+    padding: 0.3em 1.2em;
+    font-size: 0.9em;
 }
 
-ul {
-    margin-top: .2em;
+h2 + p + p + p {
+    padding-bottom: 1em;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    border-top: none;
+    border-bottom-right-radius: 4px;
 }
 
-hr {
-    margin: 2em 0;
+h2 ~ p a {
+    color: #2563eb;
+    text-decoration: none;
 }
-</style>");
+h2 ~ p a:hover {
+    text-decoration: underline;
+}
+
+p strong {
+    color: #64748b;
+    font-weight: 600;
+    display: inline-block;
+    width: 70px;
+}
+</style>
+         ");
       }
 
       try
@@ -531,7 +574,7 @@ hr {
       }
    }
 
-   private const string VERSION = "26.07.16.1";
+   private const string VERSION = "26.09.22";
    private const string REFERENCE_EXTRACTOR = "local";
    private const string REFERENCE_STYLE = "default";
 
