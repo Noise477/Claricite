@@ -14,7 +14,7 @@ The built-in local extractor requires no additional services. For higher extract
 The easiest way to run GROBID locally is with Docker. Install [Docker Desktop](https://docs.docker.com/get-started/get-docker/), then start the full GROBID image:
 
 ```bash
-docker run -d --name grobid --restart unless-stopped --platform linux/amd64 --init --ulimit core=0 -p 8070:8070 grobid/grobid:latest-full
+docker run -d --name grobid --restart unless-stopped --platform linux/amd64 --init --ulimit core=0 -p 8070:8070 lfoppiano/grobid:latest-full
 ```
 
 The `full` image is recommended because it includes the machine-learning models used for more accurate reference parsing. Once started, GROBID is available at `http://localhost:8070`.
@@ -22,7 +22,7 @@ The `full` image is recommended because it includes the machine-learning models 
 On an Apple Silicon Mac, add `--platform linux/amd64` if Docker reports a platform mismatch:
 
 ```bash
-docker run -d --name grobid --restart unless-stopped --platform linux/amd64 --init --ulimit core=0 -p 8070:8070 grobid/grobid:latest-full
+docker run -d --name grobid --restart unless-stopped --platform linux/amd64 --init --ulimit core=0 -p 8070:8070 lfoppiano/grobid:latest-full
 ```
 
 To stop the service:
