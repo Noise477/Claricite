@@ -31,6 +31,12 @@ To stop the service:
 docker stop grobid
 ```
 
+To start the existing GROBID container again later:
+
+```bash
+docker start grobid
+```
+
 ## Quick Download
 
 Get the pre-compiled, self-contained executable for your operating system (Windows, macOS, or Ubuntu Linux):
