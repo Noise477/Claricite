@@ -10,7 +10,7 @@ The built-in local extractor requires no additional services. For higher extract
 
 ## Recommended Optional GROBID Setup
 
-This is recommended for higher extraction accuracy because it uses machine-learning models for high=quality reference parsing. 
+This is recommended for higher extraction accuracy because it uses machine-learning models for high-quality reference parsing. 
 The easiest way to run GROBID locally is with Docker. Install [Docker Desktop](https://docs.docker.com/get-started/get-docker/), then start the full GROBID image:
 
 ```bash
