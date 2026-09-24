@@ -7,7 +7,6 @@ The built-in local extractor requires no additional services. For higher extract
 ## Prerequisites
 
 * **.NET Runtime**: Ensure you have the appropriate .NET runtime installed (Target Framework: `net10.0`).
-* **GROBID Service**: Optional, but recommended for higher extraction accuracy because it uses machine-learning models for document and reference parsing. Only needed when running with `-extractor grobid`; provide the endpoint with `-grobidUrl`.
 
 ## Recommended Optional GROBID Setup
 
