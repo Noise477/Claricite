@@ -6,11 +6,12 @@ The built-in local extractor requires no additional services. For higher extract
 
 ## Prerequisites
 
-* **GROBID Service**: Optional, but recommended for higher extraction accuracy because it uses machine-learning models for document and reference parsing. Only needed when running with `-extractor grobid`; provide the endpoint with `-grobidUrl`.
 * **.NET Runtime**: Ensure you have the appropriate .NET runtime installed (Target Framework: `net10.0`).
+* **GROBID Service**: Optional, but recommended for higher extraction accuracy because it uses machine-learning models for document and reference parsing. Only needed when running with `-extractor grobid`; provide the endpoint with `-grobidUrl`.
 
-## Recommended GROBID Setup
+## Recommended Optional GROBID Setup
 
+This is recommended for higher extraction accuracy because it uses machine-learning models for high=quality reference parsing. 
 The easiest way to run GROBID locally is with Docker. Install [Docker Desktop](https://docs.docker.com/get-started/get-docker/), then start the full GROBID image:
 
 ```bash
@@ -19,23 +20,9 @@ docker run -d --name grobid --restart unless-stopped --init --ulimit core=0 -p 8
 
 The `full` image is recommended because it includes the machine-learning models used for more accurate reference parsing. Once started, GROBID is available at `http://localhost:8070`.
 
-On an Apple Silicon Mac, add `--platform linux/amd64` if Docker reports a platform mismatch:
+(Note: On an Apple Silicon Mac, add `--platform linux/amd64` if Docker reports a platform mismatch.)
 
-```bash
-docker run -d --name grobid --restart unless-stopped --platform linux/amd64 --init --ulimit core=0 -p 8070:8070 lfoppiano/grobid:latest-full
-```
-
-To stop the service:
-
-```bash
-docker stop grobid
-```
-
-To start the existing GROBID container again later:
-
-```bash
-docker start grobid
-```
+If grobid is installed, you can run Claricite with these options: `-extractor grobid -grobidUrl http://localhost:8070`.
 
 ## Quick Download
 
